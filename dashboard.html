@@ -99,24 +99,36 @@
   <script src="js/auth.js"></script>
   <script src="js/db.js"></script>
   <script>
-    let currentUser=null,plans=[];
+    let currentUser=null,plans=[],useCloud=false;
 
     (async()=>{
-      const user=await requireAuth();
-      if(!user)return;
-      currentUser=await getCurrentUser();
-      if(currentUser){
-        document.getElementById('welcomeMsg').textContent='Welcome, '+(currentUser.full_name||'User')+'!';
-        document.getElementById('userName').textContent=currentUser.full_name||'';
-        document.getElementById('profileName').value=currentUser.full_name||'';
-        document.getElementById('profileEmail').value=currentUser.email||'';
-        if(currentUser.avatar_url){const av=document.getElementById('userAvatar');av.src=currentUser.avatar_url;av.style.display='block'}
+      try{
+        const user=await requireAuth();
+        if(user){
+          useCloud=true;
+          currentUser=await getCurrentUser();
+          if(currentUser){
+            document.getElementById('welcomeMsg').textContent='Welcome, '+(currentUser.full_name||'User')+'!';
+            document.getElementById('userName').textContent=currentUser.full_name||'';
+            document.getElementById('profileName').value=currentUser.full_name||'';
+            document.getElementById('profileEmail').value=currentUser.email||'';
+            if(currentUser.avatar_url){const av=document.getElementById('userAvatar');av.src=currentUser.avatar_url;av.style.display='block'}
+          }
+        }
+      }catch(e){console.log('Auth skipped - local mode')}
+      if(!useCloud){
+        document.getElementById('welcomeMsg').textContent='Welcome! (Local Mode)';
+        document.querySelector('.profile-section').style.display='none';
       }
       await loadPlans();
-      checkMigration();
+      if(useCloud)checkMigration();
     })();
 
-    async function loadPlans(){plans=await getFloorPlans();renderPlans()}
+    async function loadPlans(){
+      if(useCloud){plans=await getFloorPlans();}
+      else{plans=JSON.parse(localStorage.getItem('fp_plans')||'[]');}
+      renderPlans();
+    }
 
     function renderPlans(){
       const grid=document.getElementById('plansGrid');
@@ -163,9 +175,9 @@
     }
 
     function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
-    function editPlan(id){window.location.href='index.html?plan='+id}
-    function view3D(id){window.location.href='3d-view.html?plan='+id}
-    function viewEst(id){window.location.href='estimate.html?plan='+id}
+    function editPlan(id){window.location.href=useCloud?'index.html?plan='+id:'index.html?local='+id}
+    function view3D(id){window.location.href=useCloud?'3d-view.html?plan='+id:'3d-view.html?local='+id}
+    function viewEst(id){window.location.href=useCloud?'estimate.html?plan='+id:'estimate.html?local='+id}
 
     async function sharePlan(id){
       const token=await toggleShare(id,true);
@@ -175,8 +187,15 @@
         showToast('Link copied! '+url);
       }
     }
-    async function dupPlan(id){const p=await duplicateFloorPlan(id);if(p){showToast('Plan duplicated!');await loadPlans()}}
-    async function delPlan(id,name){if(!confirm('Delete "'+name+'"? This cannot be undone.'))return;if(await deleteFloorPlan(id)){showToast('Plan deleted');await loadPlans()}}
+    async function dupPlan(id){
+      if(useCloud){const p=await duplicateFloorPlan(id);if(p){showToast('Plan duplicated!');await loadPlans()}}
+      else{const orig=plans.find(p=>p.id===id);if(!orig)return;const copy={...JSON.parse(JSON.stringify(orig)),id:'local_'+Date.now(),name:orig.name+' (Copy)',updated_at:new Date().toISOString()};plans.push(copy);localStorage.setItem('fp_plans',JSON.stringify(plans));showToast('Plan duplicated!');renderPlans()}
+    }
+    async function delPlan(id,name){
+      if(!confirm('Delete "'+name+'"? This cannot be undone.'))return;
+      if(useCloud){if(await deleteFloorPlan(id)){showToast('Plan deleted');await loadPlans()}}
+      else{plans=plans.filter(p=>p.id!==id);localStorage.setItem('fp_plans',JSON.stringify(plans));localStorage.removeItem('fp_'+id);showToast('Plan deleted');renderPlans()}
+    }
 
     function openCreateModal(){document.getElementById('createModal').classList.remove('hidden');document.getElementById('newPlanName').focus()}
     function closeCreateModal(){document.getElementById('createModal').classList.add('hidden')}
@@ -184,8 +203,15 @@
       const name=document.getElementById('newPlanName').value.trim()||'Untitled Plan';
       const w=parseInt(document.getElementById('newPlotW').value)||50;
       const d=parseInt(document.getElementById('newPlotD').value)||77;
-      const plan=await createFloorPlan(name,w,d);
-      if(plan)window.location.href='index.html?plan='+plan.id;
+      if(useCloud){
+        const plan=await createFloorPlan(name,w,d);
+        if(plan)window.location.href='index.html?plan='+plan.id;
+      }else{
+        const id='local_'+Date.now();
+        const plan={id,name,plot_width:w,plot_depth:d,rooms:[],created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+        plans.push(plan);localStorage.setItem('fp_plans',JSON.stringify(plans));
+        window.location.href='index.html?local='+id;
+      }
     }
 
     async function saveProfile(){

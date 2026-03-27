@@ -326,11 +326,28 @@ async function init(){
   }
 
   // Local mode — load from localStorage
+  const localId=params.get('local');
+  if(localId){
+    const allPlans=JSON.parse(localStorage.getItem('fp_plans')||'[]');
+    const lp=allPlans.find(p=>p.id===localId);
+    if(lp){
+      PW=lp.plot_width||50;PH=lp.plot_depth||77;
+      document.getElementById('planName').textContent=lp.name;
+      document.getElementById('plotInfo').textContent=PW+'×'+PH+' ft · Grid: 1 ft · Front = Street (Bottom)';
+      currentPlanId=localId;
+    }
+  }
   plot.style.width=PW*PX+'px';
   plot.style.height=PH*PX+'px';
   buildGrid();buildPalette();
-  const saved=localStorage.getItem(SAVE_KEY);
-  if(saved){try{const d=JSON.parse(saved);if(d.rooms)d.rooms.forEach(r=>addRoom(r.t,r.n,r.c,r.w,r.h,r.x,r.y,r.cat))}catch(e){}}
+  if(localId){
+    const allPlans=JSON.parse(localStorage.getItem('fp_plans')||'[]');
+    const lp=allPlans.find(p=>p.id===localId);
+    if(lp&&lp.rooms&&lp.rooms.length){lp.rooms.forEach(r=>addRoom(r.t||r.type,r.n||r.name,r.c||r.color,r.w,r.h,r.x,r.y,r.cat||r.category))}
+  }else{
+    const saved=localStorage.getItem(SAVE_KEY);
+    if(saved){try{const d=JSON.parse(saved);if(d.rooms)d.rooms.forEach(r=>addRoom(r.t,r.n,r.c,r.w,r.h,r.x,r.y,r.cat))}catch(e){}}
+  }
   pushUndo();zoomFit();
 }
 
@@ -539,11 +556,18 @@ function redoAction(){if(!redoStack.length){toast('Nothing to redo');return}undo
 
 // ====== SAVE/LOAD (localStorage) ======
 function saveToLocal(){
-  const data={v:2,plot:{w:PW,h:PH},rooms:rooms.map(r=>({t:r.t,n:r.n,c:r.c,w:r.w,h:r.h,x:r.x,y:r.y,cat:r.cat})),ts:Date.now()};
+  const roomData=rooms.map(r=>({t:r.t,n:r.n,c:r.c,w:r.w,h:r.h,x:r.x,y:r.y,cat:r.cat}));
+  const data={v:2,plot:{w:PW,h:PH},rooms:roomData,ts:Date.now()};
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(data))}catch(e){}
   dirty=false;updateSaveBadge();
+  // Save to local plans list
+  if(currentPlanId&&currentPlanId.startsWith('local_')){
+    const allPlans=JSON.parse(localStorage.getItem('fp_plans')||'[]');
+    const idx=allPlans.findIndex(p=>p.id===currentPlanId);
+    if(idx>=0){allPlans[idx].rooms=roomData;allPlans[idx].updated_at=new Date().toISOString();localStorage.setItem('fp_plans',JSON.stringify(allPlans))}
+  }
   // Save to Supabase
-  if(currentPlanId){
+  if(currentPlanId&&!currentPlanId.startsWith('local_')){
     clearTimeout(supabaseSaveTimer);
     supabaseSaveTimer=setTimeout(async()=>{
       const ok=await updateFloorPlan(currentPlanId,rooms);
