@@ -14,7 +14,7 @@ app.get('/share/:token', (req, res) => {
 
 // SPA fallback — serve index.html for unknown routes
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'login.html'));
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.listen(PORT, () => {

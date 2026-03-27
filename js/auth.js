@@ -5,12 +5,14 @@ async function requireAuth(options = {}) {
     const params = new URLSearchParams(window.location.search);
     if (params.get(options.shareParam)) return null;
   }
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    window.location.href = 'login.html';
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
+    return session.user;
+  } catch(e) {
+    console.log('Auth check failed:', e.message);
     return null;
   }
-  return session.user;
 }
 
 async function getCurrentUser() {

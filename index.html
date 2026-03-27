@@ -291,15 +291,16 @@ const plot=document.getElementById('plot'),ca=document.getElementById('canvasAre
 
 // ====== INIT ======
 async function init(){
-  // Check auth
-  const user=await requireAuth();
-  if(!user)return;
+  // Check auth (optional - works without login too)
+  let user=null;
+  try{ user=await requireAuth(); }catch(e){ console.log('Auth skipped - running in local mode'); }
 
   // Get plan ID from URL
   const params=new URLSearchParams(window.location.search);
   currentPlanId=params.get('plan');
 
-  if(currentPlanId){
+  if(currentPlanId && user){
+    try{
     const plan=await getFloorPlan(currentPlanId);
     if(plan){
       PW=plan.plot_width||50;
@@ -321,11 +322,16 @@ async function init(){
       window.location.href='dashboard.html';
       return;
     }
-  }else{
-    // No plan ID — redirect to dashboard
-    window.location.href='dashboard.html';
-    return;
+    }catch(e){ console.log('Cloud load failed, using local'); }
   }
+
+  // Local mode — load from localStorage
+  plot.style.width=PW*PX+'px';
+  plot.style.height=PH*PX+'px';
+  buildGrid();buildPalette();
+  const saved=localStorage.getItem(SAVE_KEY);
+  if(saved){try{const d=JSON.parse(saved);if(d.rooms)d.rooms.forEach(r=>addRoom(r.t,r.n,r.c,r.w,r.h,r.x,r.y,r.cat))}catch(e){}}
+  pushUndo();zoomFit();
 }
 
 function buildGrid(){
