@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shared Floor Plan — Floor Plan Builder</title>
+  <link rel="stylesheet" href="css/shared.css">
+  <style>
+    .view-container{max-width:900px;margin:0 auto;padding:24px}
+    .plan-header{margin-bottom:16px}
+    .plan-header h2{font-size:22px;color:#f0f6fc;margin-bottom:4px}
+    .plan-header .meta{color:#8b949e;font-size:13px}
+    .plan-canvas{background:#0d1117;border:1px solid #30363d;border-radius:8px;position:relative;overflow:hidden;margin-bottom:16px}
+    .plan-canvas .plot{position:relative;margin:20px auto;background:#1a1f2b;border:1px solid #30363d}
+    .plan-canvas .room-box{position:absolute;border:2px solid;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;text-align:center;overflow:hidden;padding:2px}
+    .view-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}
+    .cta-banner{background:linear-gradient(135deg,#238636,#1f6feb);border-radius:8px;padding:20px 24px;text-align:center;margin-top:24px}
+    .cta-banner h3{color:#fff;margin-bottom:8px}
+    .cta-banner p{color:#ffffffcc;font-size:14px;margin-bottom:12px}
+    .cta-banner a{display:inline-block;padding:10px 24px;background:#fff;color:#238636;border-radius:6px;font-weight:600;font-size:14px}
+    .error-state{text-align:center;padding:80px 20px;color:#8b949e}
+    .error-state h2{color:#f0f6fc;margin-bottom:8px}
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Floor Plan Builder</h1>
+    <div class="header-right"><a href="login.html" class="btn btn-primary">Create Your Own</a></div>
+  </header>
+  <div class="view-container" id="content">
+    <div style="display:flex;align-items:center;justify-content:center;padding:80px"><div class="skeleton" style="width:200px;height:20px"></div></div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/db.js"></script>
+  <script>
+    const PX=6;
+    (async()=>{
+      const pathParts=window.location.pathname.split('/share/');
+      const params=new URLSearchParams(window.location.search);
+      const token=(pathParts.length>1&&pathParts[1])?pathParts[1].replace(/\/$/,''):params.get('token');
+      if(!token){showError('No share link provided','Please use a valid share link to view a floor plan.');return}
+      const plan=await getPublicPlan(token);
+      if(!plan){showError('Floor plan not found','This share link may be invalid or the owner has disabled sharing.');return}
+      renderPlan(plan);
+    })();
+
+    function renderPlan(plan){
+      const rooms=plan.rooms||[],w=plan.plot_width,h=plan.plot_depth;
+      const an=plan.profiles?.full_name||'Anonymous';
+      const fn=an.split(' ')[0];
+      const li=an.split(' ').length>1?' '+an.split(' ').slice(-1)[0][0]+'.':'';
+      document.title=plan.name+' — Floor Plan Builder';
+      let rh='';
+      rooms.forEach(r=>{
+        const rx=(r.x??0)*PX,ry=(r.y??0)*PX,rw=(r.w??10)*PX,rhh=(r.h??10)*PX;
+        const color=r.color||r.c||'#4a9eff',name=r.name||r.n||r.type||r.t||'';
+        const cat=r.category||r.cat||'existing';
+        const op=cat==='demolish'?'66':'b3';
+        const bs=cat==='demolish'?'dashed':cat==='new'?'dashed':'solid';
+        rh+=`<div class="room-box" style="left:${rx}px;top:${ry}px;width:${rw}px;height:${rhh}px;background:${color}${op};border-color:${color};border-style:${bs}">${esc(name)}<br>${r.w}x${r.h}</div>`;
+      });
+      document.getElementById('content').innerHTML=`
+        <div class="plan-header"><h2>${esc(plan.name)}</h2><div class="meta">by ${esc(fn+li)} &bull; ${w}x${h} ft &bull; ${rooms.length} rooms</div></div>
+        <div class="plan-canvas"><div class="plot" style="width:${w*PX}px;height:${h*PX}px">${rh}</div></div>
+        <div class="view-actions">
+          <a href="3d-view.html?share=${plan.share_token}" class="btn">View 3D Model</a>
+          <a href="estimate.html?share=${plan.share_token}" class="btn">View Cost Estimate</a>
+        </div>
+        <div class="cta-banner"><h3>Design Your Own Floor Plan</h3><p>Free drag & drop designer with 3D visualization and cost estimates</p><a href="login.html">Get Started Free</a></div>`;
+    }
+    function showError(t,m){document.getElementById('content').innerHTML='<div class="error-state"><h2>'+t+'</h2><p>'+m+'</p><a href="login.html" class="btn btn-primary mt-16">Create Your Own Floor Plan</a></div>'}
+    function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+  </script>
+</body>
+</html>

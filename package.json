@@ -1,0 +1,12 @@
+{
+  "name": "floor-plan-builder",
+  "version": "1.0.0",
+  "description": "Multi-user floor plan designer with 3D view and cost estimation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

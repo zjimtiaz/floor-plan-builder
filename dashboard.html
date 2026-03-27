@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Floor Plan Builder</title>
+  <link rel="stylesheet" href="css/shared.css">
+  <style>
+    .dashboard{max-width:1100px;margin:0 auto;padding:24px}
+    .welcome{margin-bottom:24px}
+    .welcome h2{font-size:22px;color:#f0f6fc;margin-bottom:4px}
+    .welcome .stats{color:#8b949e;font-size:13px}
+    .welcome .stats span{color:#4a9eff;font-weight:600}
+    .section-title{font-size:15px;color:#f0f6fc;margin:24px 0 12px;padding-bottom:8px;border-bottom:1px solid #21262d}
+    .plans-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+    .plan-card{cursor:default;position:relative}
+    .plan-card .preview{height:140px;background:#0d1117;border-radius:6px 6px 0 0;overflow:hidden}
+    .plan-card .preview canvas{width:100%;height:100%}
+    .plan-card .info{padding:12px}
+    .plan-card .info h3{font-size:15px;color:#f0f6fc;margin-bottom:4px}
+    .plan-card .info .meta{font-size:12px;color:#8b949e}
+    .plan-card .actions{display:flex;gap:4px;padding:0 12px 12px;flex-wrap:wrap}
+    .plan-card .actions button{padding:4px 10px;font-size:12px;background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:4px;cursor:pointer}
+    .plan-card .actions button:hover{background:#30363d}
+    .plan-card .actions button.del:hover{background:#da3633;color:#fff}
+    .create-card{border:2px dashed #30363d;background:transparent;display:flex;align-items:center;justify-content:center;min-height:220px;cursor:pointer;border-radius:8px;transition:border-color .15s,background .15s}
+    .create-card:hover{border-color:#4a9eff;background:#4a9eff11}
+    .create-card .plus{font-size:36px;color:#4a9eff;display:block;margin-bottom:8px;text-align:center}
+    .create-card span{color:#8b949e;font-size:14px}
+    .profile-section{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-top:16px}
+    .profile-section .profile-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+    .profile-section .profile-row .input-group{flex:1;min-width:200px}
+    .share-toast{background:#238636;color:#fff;padding:8px 16px;border-radius:6px;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;font-size:13px;animation:toastIn .3s ease,toastOut .3s ease 2.7s forwards}
+    @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}}
+    @keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(10px)}}
+    .skeleton-card{height:220px}
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Floor Plan Builder</h1>
+    <div class="header-right">
+      <span id="userName" class="text-small text-muted"></span>
+      <img id="userAvatar" class="user-avatar" src="" alt="" style="display:none">
+      <button class="btn" onclick="signOut()">Logout</button>
+    </div>
+  </header>
+  <div class="dashboard">
+    <div class="welcome">
+      <h2 id="welcomeMsg">Welcome!</h2>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="section-title">My Floor Plans</div>
+    <div class="plans-grid" id="plansGrid">
+      <div class="card skeleton skeleton-card"></div>
+      <div class="card skeleton skeleton-card"></div>
+      <div class="card skeleton skeleton-card"></div>
+    </div>
+    <div class="section-title">Profile Settings</div>
+    <div class="profile-section">
+      <div class="profile-row">
+        <div class="input-group"><label>Name</label><input type="text" id="profileName" placeholder="Your name"></div>
+        <div class="input-group"><label>Email</label><input type="text" id="profileEmail" disabled></div>
+        <button class="btn btn-primary" onclick="saveProfile()" style="align-self:flex-end">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Modal -->
+  <div id="createModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Create New Floor Plan</h2>
+      <div class="input-group"><label>Plan Name</label><input type="text" id="newPlanName" placeholder="e.g. Mera Ghar" maxlength="50"></div>
+      <div style="display:flex;gap:12px">
+        <div class="input-group" style="flex:1"><label>Plot Width (ft)</label><input type="number" id="newPlotW" value="50" min="10" max="200"></div>
+        <div class="input-group" style="flex:1"><label>Plot Depth (ft)</label><input type="number" id="newPlotD" value="77" min="10" max="200"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeCreateModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="handleCreate()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Migration Modal -->
+  <div id="migrateModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Existing Floor Plan Found</h2>
+      <p style="color:#8b949e;font-size:14px;margin-bottom:16px">We found a floor plan saved in your browser. Would you like to import it to your account?</p>
+      <div class="modal-actions">
+        <button class="btn" onclick="skipMigration()">Skip</button>
+        <button class="btn btn-primary" onclick="handleMigration()">Import</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/db.js"></script>
+  <script>
+    let currentUser=null,plans=[];
+
+    (async()=>{
+      const user=await requireAuth();
+      if(!user)return;
+      currentUser=await getCurrentUser();
+      if(currentUser){
+        document.getElementById('welcomeMsg').textContent='Welcome, '+(currentUser.full_name||'User')+'!';
+        document.getElementById('userName').textContent=currentUser.full_name||'';
+        document.getElementById('profileName').value=currentUser.full_name||'';
+        document.getElementById('profileEmail').value=currentUser.email||'';
+        if(currentUser.avatar_url){const av=document.getElementById('userAvatar');av.src=currentUser.avatar_url;av.style.display='block'}
+      }
+      await loadPlans();
+      checkMigration();
+    })();
+
+    async function loadPlans(){plans=await getFloorPlans();renderPlans()}
+
+    function renderPlans(){
+      const grid=document.getElementById('plansGrid');
+      let html='<div class="create-card" onclick="openCreateModal()"><div><div class="plus">+</div><span>Create New Floor Plan</span></div></div>';
+      if(!plans.length){
+        html+='<div class="card" style="grid-column:span 2"><div class="empty-state"><h3>No floor plans yet!</h3><p>Click "Create New Floor Plan" to get started.</p></div></div>';
+      }
+      plans.forEach(p=>{
+        const rc=(p.rooms||[]).length;
+        const up=new Date(p.updated_at).toLocaleDateString('en-PK',{day:'numeric',month:'short',year:'numeric'});
+        html+=`<div class="card plan-card">
+          <div class="preview"><canvas id="cv_${p.id}"></canvas></div>
+          <div class="info"><h3>${esc(p.name)}</h3><div class="meta">${p.plot_width}x${p.plot_depth} ft &bull; ${rc} rooms &bull; ${up}</div></div>
+          <div class="actions">
+            <button onclick="editPlan('${p.id}')">Edit</button>
+            <button onclick="view3D('${p.id}')">3D</button>
+            <button onclick="viewEst('${p.id}')">Cost</button>
+            <button onclick="sharePlan('${p.id}')">Share</button>
+            <button onclick="dupPlan('${p.id}')">Copy</button>
+            <button class="del" onclick="delPlan('${p.id}','${esc(p.name)}')">Del</button>
+          </div></div>`;
+      });
+      grid.innerHTML=html;
+      plans.forEach(p=>{const cv=document.getElementById('cv_'+p.id);if(cv)drawPreview(cv,p)});
+      const tr=plans.reduce((s,p)=>s+(p.rooms||[]).length,0);
+      document.getElementById('stats').innerHTML='<span>'+plans.length+'</span> Floor Plans &bull; <span>'+tr+'</span> Total Rooms';
+    }
+
+    function drawPreview(cv,plan){
+      const w=plan.plot_width,h=plan.plot_depth,rooms=plan.rooms||[];
+      cv.width=cv.offsetWidth*2;cv.height=cv.offsetHeight*2;
+      const ctx=cv.getContext('2d');
+      const sx=cv.width/w,sy=cv.height/h,s=Math.min(sx,sy)*.85;
+      const ox=(cv.width-w*s)/2,oy=(cv.height-h*s)/2;
+      ctx.fillStyle='#1a1f2b';ctx.fillRect(ox,oy,w*s,h*s);
+      ctx.strokeStyle='#30363d';ctx.strokeRect(ox,oy,w*s,h*s);
+      rooms.forEach(r=>{
+        const rx=(r.x??0)*s,ry=(r.y??0)*s,rw=(r.w??10)*s,rh=(r.h??10)*s;
+        ctx.fillStyle=(r.color||r.c||'#4a9eff')+'88';
+        ctx.fillRect(ox+rx,oy+ry,rw,rh);
+        ctx.strokeStyle=r.color||r.c||'#4a9eff';ctx.lineWidth=1;
+        ctx.strokeRect(ox+rx,oy+ry,rw,rh);
+      });
+    }
+
+    function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+    function editPlan(id){window.location.href='index.html?plan='+id}
+    function view3D(id){window.location.href='3d-view.html?plan='+id}
+    function viewEst(id){window.location.href='estimate.html?plan='+id}
+
+    async function sharePlan(id){
+      const token=await toggleShare(id,true);
+      if(token){
+        const url=window.location.origin+'/share/'+token;
+        try{await navigator.clipboard.writeText(url)}catch(e){}
+        showToast('Link copied! '+url);
+      }
+    }
+    async function dupPlan(id){const p=await duplicateFloorPlan(id);if(p){showToast('Plan duplicated!');await loadPlans()}}
+    async function delPlan(id,name){if(!confirm('Delete "'+name+'"? This cannot be undone.'))return;if(await deleteFloorPlan(id)){showToast('Plan deleted');await loadPlans()}}
+
+    function openCreateModal(){document.getElementById('createModal').classList.remove('hidden');document.getElementById('newPlanName').focus()}
+    function closeCreateModal(){document.getElementById('createModal').classList.add('hidden')}
+    async function handleCreate(){
+      const name=document.getElementById('newPlanName').value.trim()||'Untitled Plan';
+      const w=parseInt(document.getElementById('newPlotW').value)||50;
+      const d=parseInt(document.getElementById('newPlotD').value)||77;
+      const plan=await createFloorPlan(name,w,d);
+      if(plan)window.location.href='index.html?plan='+plan.id;
+    }
+
+    async function saveProfile(){
+      const name=document.getElementById('profileName').value.trim();if(!name)return;
+      const{error}=await supabase.from('profiles').update({full_name:name}).eq('id',currentUser.id);
+      if(!error){showToast('Profile saved!');document.getElementById('welcomeMsg').textContent='Welcome, '+name+'!';document.getElementById('userName').textContent=name}
+    }
+
+    function checkMigration(){
+      if(localStorage.getItem('migration_offered'))return;
+      const raw=localStorage.getItem('floorplan_v2');if(!raw)return;
+      try{const d=JSON.parse(raw);if(d.rooms&&d.rooms.length)document.getElementById('migrateModal').classList.remove('hidden')}catch(e){}
+    }
+    async function handleMigration(){
+      const raw=localStorage.getItem('floorplan_v2');if(!raw)return;
+      const d=JSON.parse(raw);
+      const rooms=(d.rooms||[]).map(r=>({type:r.type||r.t,name:r.name||r.n,color:r.color||r.c,w:r.w,h:r.h,x:r.x,y:r.y,category:r.category||r.cat||'existing'}));
+      const plan=await createFloorPlan('Imported Plan',d.plot?.w||50,d.plot?.h||77);
+      if(plan){await updateFloorPlan(plan.id,rooms);localStorage.setItem('migration_offered','true');document.getElementById('migrateModal').classList.add('hidden');showToast('Floor plan imported!');await loadPlans()}
+    }
+    function skipMigration(){localStorage.setItem('migration_offered','true');document.getElementById('migrateModal').classList.add('hidden')}
+
+    function showToast(msg){const t=document.createElement('div');t.className='share-toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000)}
+  </script>
+</body>
+</html>

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D View & Elevation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e0e0e0;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;padding:5px 12px;background:#1a1b23;border-bottom:1px solid #2a2b35;flex-shrink:0;gap:10px}
+.topbar h1{font-size:14px;font-weight:600;color:#fff}
+.topbar a{font-size:11px;color:#4a9eff;text-decoration:none;padding:4px 10px;border:1px solid #2a3a5a;border-radius:4px}
+.topbar a:hover{background:#1a2a3a}
+.tabs{display:flex;gap:2px}
+.tabs .tab{padding:4px 14px;font-size:11px;background:transparent;border:1px solid transparent;border-radius:4px;color:#666;cursor:pointer}
+.tabs .tab:hover{color:#ccc}
+.tabs .tab.active{background:#2a2b35;color:#fff;border-color:#3a3b45}
+.main{flex:1;position:relative;overflow:hidden}
+#view3d,#viewElev{position:absolute;inset:0}
+#viewElev{display:none;overflow:auto;background:#0f1117}
+
+/* 3D controls overlay */
+.controls-3d{position:absolute;top:10px;right:10px;z-index:100;display:flex;flex-direction:column;gap:4px}
+.controls-3d button{padding:5px 12px;background:#1a1b23cc;border:1px solid #2a2b35;border-radius:4px;color:#ccc;font-size:10px;cursor:pointer;backdrop-filter:blur(4px)}
+.controls-3d button:hover{background:#2a2b35;color:#fff}
+.controls-3d select{padding:4px 8px;background:#1a1b23;border:1px solid #2a2b35;border-radius:4px;color:#ccc;font-size:10px}
+
+/* Legend */
+.legend-3d{position:absolute;bottom:10px;left:10px;z-index:100;background:#1a1b23cc;border:1px solid #2a2b35;border-radius:6px;padding:8px 12px;font-size:9px;backdrop-filter:blur(4px)}
+.legend-3d .li{display:flex;align-items:center;gap:5px;margin:2px 0}
+.legend-3d .lb{width:12px;height:8px;border-radius:1px}
+
+/* Help */
+.help-3d{position:absolute;bottom:10px;right:10px;z-index:100;background:#1a1b23cc;border:1px solid #2a2b35;border-radius:6px;padding:6px 10px;font-size:9px;color:#555;backdrop-filter:blur(4px)}
+
+/* Elevation */
+.elev-container{padding:20px;display:flex;flex-direction:column;align-items:center;gap:20px}
+.elev-title{font-size:14px;color:#fff;text-align:center}
+.elev-sub{font-size:11px;color:#666;text-align:center}
+.elev-canvas-wrap{background:#151620;border:1px solid #2a2b35;border-radius:8px;padding:16px;display:inline-block}
+.elev-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
+.elev-controls label{font-size:10px;color:#888}
+.elev-controls input,.elev-controls select{padding:3px 8px;background:#1a1b25;border:1px solid #252630;border-radius:3px;color:#ddd;font-size:11px}
+.elev-controls button{padding:4px 12px;background:#1a1b25;border:1px solid #252630;border-radius:4px;color:#ccc;font-size:10px;cursor:pointer}
+.elev-controls button:hover{background:#252630}
+.elev-controls button.active{background:#2a2b35;color:#fff;border-color:#4a9eff}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>3D View & Elevation</h1>
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('3d')">3D View</div>
+    <div class="tab" onclick="showTab('elev')">Front Elevation</div>
+    <div class="tab" onclick="showTab('side')">Side Elevation</div>
+  </div>
+  <a href="dashboard.html">Dashboard</a>
+  <a href="index.html" id="backLink">Back to Floor Plan</a>
+</div>
+
+<div class="main">
+  <div id="view3d">
+    <div class="controls-3d">
+      <select id="camPreset" onchange="setCamPreset(this.value)">
+        <option value="front">Front View</option>
+        <option value="back">Back View</option>
+        <option value="left">Left Side</option>
+        <option value="right">Right Side</option>
+        <option value="top" selected>Top Down</option>
+        <option value="bird">Bird's Eye</option>
+      </select>
+      <button onclick="toggleRoof()">Toggle Roof</button>
+      <button onclick="toggleLabels()">Toggle Labels</button>
+      <button onclick="toggleDemolish()">Toggle Demolish</button>
+    </div>
+    <div class="legend-3d">
+      <div class="li"><div class="lb" style="background:rgba(74,158,255,.6)"></div> Existing</div>
+      <div class="li"><div class="lb" style="background:rgba(100,255,100,.6)"></div> New / Planned</div>
+      <div class="li"><div class="lb" style="background:rgba(255,170,0,.4)"></div> Demolish</div>
+    </div>
+    <div class="help-3d">
+      Left-drag: rotate · Right-drag: pan · Scroll: zoom
+    </div>
+  </div>
+
+  <div id="viewElev">
+    <div class="elev-container">
+      <div class="elev-title" id="elevTitle">Front Elevation</div>
+      <div class="elev-sub">Street side view — looking from the front</div>
+      <div class="elev-controls">
+        <label>Wall Height</label><input type="number" id="wallH" value="10" min="6" max="20" onchange="drawElevation()"> ft
+        <label>Parapet</label><input type="number" id="parapetH" value="3" min="0" max="5" onchange="drawElevation()"> ft
+        <label>Slab</label><input type="number" id="slabH" value="4" min="3" max="8" onchange="drawElevation()"> inches
+        <button onclick="saveElevation()">Save as PNG</button>
+      </div>
+      <div class="elev-canvas-wrap">
+        <canvas id="elevCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/db.js"></script>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+</script>
+<script type="module">
+import*as THREE from'three';
+import{OrbitControls}from'three/addons/controls/OrbitControls.js';
+import{CSS2DRenderer,CSS2DObject}from'three/addons/renderers/CSS2DRenderer.js';
+
+// ====== LOAD DATA ======
+let planData=null;
+let showRoof=true,showLabels=true,showDem=true;
+let currentElev='front';
+
+async function loadDataFromSupabase(){
+  const params=new URLSearchParams(window.location.search);
+  const planId=params.get('plan');
+  const shareToken=params.get('share');
+
+  if(shareToken){
+    const plan=await getPublicPlan(shareToken);
+    if(!plan){document.body.innerHTML='<p style="color:#f66;text-align:center;margin-top:40px">Plan not found</p>';return null}
+    return{plot:{w:plan.plot_width,h:plan.plot_depth},rooms:(plan.rooms||[]).map(r=>({type:r.type||r.t,name:r.name||r.n,color:r.color||r.c,w:r.w,h:r.h,x:r.x,y:r.y,cat:r.category||r.cat||'existing'}))};
+  }
+  if(planId){
+    const user=await requireAuth();
+    if(!user)return null;
+    const plan=await getFloorPlan(planId);
+    if(!plan){alert('Plan not found');window.location.href='dashboard.html';return null}
+    // Update back link
+    const bl=document.getElementById('backLink');if(bl)bl.href='index.html?plan='+planId;
+    return{plot:{w:plan.plot_width,h:plan.plot_depth},rooms:(plan.rooms||[]).map(r=>({type:r.type||r.t,name:r.name||r.n,color:r.color||r.c,w:r.w,h:r.h,x:r.x,y:r.y,cat:r.category||r.cat||'existing'}))};
+  }
+  // Fallback: try localStorage
+  try{
+    const raw=localStorage.getItem('floorplan_v2');
+    if(raw){const d=JSON.parse(raw);return{plot:{w:d.plot?.w||50,h:d.plot?.h||77},rooms:(d.rooms||[]).map(r=>({type:r.type||r.t,name:r.name||r.n,color:r.color||r.c,w:r.w,h:r.h,x:r.x,y:r.y,cat:r.category||r.cat||'existing'}))};}
+  }catch(e){}
+  return{plot:{w:50,h:77},rooms:[]};
+}
+
+// Async init wrapper
+(async()=>{
+planData=await loadDataFromSupabase();
+if(!planData)return;
+
+const PW=planData.plot.w, PH=planData.plot.h;
+const WALL_H=10;
+const SCALE=0.5;
+
+function roomHeight(r){
+  if(r.type==='courtyard'||r.type==='veranda')return 0.5;
+  if(r.type==='wall')return WALL_H;
+  if(r.type==='stairs')return WALL_H;
+  return WALL_H;
+}
+
+// ====== THREE.JS SETUP ======
+const container=document.getElementById('view3d');
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0a0b10);
+scene.fog=new THREE.Fog(0x0a0b10,80,200);
+
+const camera=new THREE.PerspectiveCamera(50,container.clientWidth/container.clientHeight,0.1,500);
+camera.position.set(0,50,0);
+camera.lookAt(0,0,0);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(container.clientWidth,container.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+// CSS2D for labels
+const labelRenderer=new CSS2DRenderer();
+labelRenderer.setSize(container.clientWidth,container.clientHeight);
+labelRenderer.domElement.style.position='absolute';
+labelRenderer.domElement.style.top='0';
+labelRenderer.domElement.style.pointerEvents='none';
+container.appendChild(labelRenderer.domElement);
+
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;
+controls.dampingFactor=0.08;
+controls.maxPolarAngle=Math.PI/2-0.05;
+controls.target.set(PW*SCALE/2,0,PH*SCALE/2);
+
+// ====== LIGHTS ======
+const ambient=new THREE.AmbientLight(0x404060,0.8);
+scene.add(ambient);
+const sun=new THREE.DirectionalLight(0xffffff,1.2);
+sun.position.set(30,40,-20);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-40;sun.shadow.camera.right=40;
+sun.shadow.camera.top=40;sun.shadow.camera.bottom=-40;
+scene.add(sun);
+const fill=new THREE.DirectionalLight(0x8888ff,0.3);
+fill.position.set(-20,20,30);
+scene.add(fill);
+
+// ====== GROUND / PLOT ======
+const groundGeo=new THREE.PlaneGeometry(200,200);
+const groundMat=new THREE.MeshStandardMaterial({color:0x111118});
+const ground=new THREE.Mesh(groundGeo,groundMat);
+ground.rotation.x=-Math.PI/2;ground.position.set(PW*SCALE/2,-0.01,PH*SCALE/2);
+ground.receiveShadow=true;
+scene.add(ground);
+
+// Plot outline
+const plotGeo=new THREE.PlaneGeometry(PW*SCALE,PH*SCALE);
+const plotMat=new THREE.MeshStandardMaterial({color:0x1a1b25});
+const plotMesh=new THREE.Mesh(plotGeo,plotMat);
+plotMesh.rotation.x=-Math.PI/2;plotMesh.position.set(PW*SCALE/2,0,PH*SCALE/2);
+plotMesh.receiveShadow=true;
+scene.add(plotMesh);
+
+// Plot border
+const borderPoints=[
+  new THREE.Vector3(0,0.02,0),new THREE.Vector3(PW*SCALE,0.02,0),
+  new THREE.Vector3(PW*SCALE,0.02,PH*SCALE),new THREE.Vector3(0,0.02,PH*SCALE),
+  new THREE.Vector3(0,0.02,0)
+];
+const borderGeo=new THREE.BufferGeometry().setFromPoints(borderPoints);
+const borderLine=new THREE.Line(borderGeo,new THREE.LineBasicMaterial({color:0x3a7adf}));
+scene.add(borderLine);
+
+// "FRONT" label on ground
+const frontDiv=document.createElement('div');
+frontDiv.style.cssText='color:#3a7adf;font-size:10px;letter-spacing:3px;font-weight:600';
+frontDiv.textContent='FRONT (STREET)';
+const frontLabel=new CSS2DObject(frontDiv);
+frontLabel.position.set(PW*SCALE/2,0.1,PH*SCALE+1.5);
+scene.add(frontLabel);
+
+// ====== BUILD ROOMS ======
+const roomMeshes=[];
+const roofMeshes=[];
+const labelObjects=[];
+
+function hex2three(hex){return new THREE.Color(hex)}
+
+planData.rooms.forEach(r=>{
+  const h=roomHeight(r)*SCALE;
+  const isDem=r.cat==='demolish';
+  const isNew=r.cat==='new';
+  const color=hex2three(isDem?'#ff8800':r.color);
+
+  // Walls — use EdgesGeometry for wireframe + translucent fill
+  const boxGeo=new THREE.BoxGeometry(r.w*SCALE,h,r.h*SCALE);
+  const boxMat=new THREE.MeshStandardMaterial({
+    color,transparent:true,
+    opacity:isDem?0.15:isNew?0.5:0.35,
+    side:THREE.DoubleSide
+  });
+  const mesh=new THREE.Mesh(boxGeo,boxMat);
+  mesh.position.set((r.x+r.w/2)*SCALE,h/2,(r.y+r.h/2)*SCALE);
+  mesh.castShadow=!isDem;mesh.receiveShadow=true;
+  mesh.userData={room:r,isDem};
+  scene.add(mesh);
+  roomMeshes.push(mesh);
+
+  // Wireframe edges
+  const edgeGeo=new THREE.EdgesGeometry(boxGeo);
+  const edgeMat=new THREE.LineBasicMaterial({color,transparent:true,opacity:isDem?0.3:0.7});
+  const edges=new THREE.LineSegments(edgeGeo,edgeMat);
+  mesh.add(edges);
+
+  // Roof slab (thin box on top)
+  if(r.type!=='courtyard'&&r.type!=='veranda'&&!isDem){
+    const roofGeo=new THREE.BoxGeometry(r.w*SCALE,0.15,r.h*SCALE);
+    const roofMat=new THREE.MeshStandardMaterial({color:0x555555,transparent:true,opacity:0.6});
+    const roof=new THREE.Mesh(roofGeo,roofMat);
+    roof.position.set((r.x+r.w/2)*SCALE,h+0.075,(r.y+r.h/2)*SCALE);
+    roof.castShadow=true;
+    scene.add(roof);
+    roofMeshes.push(roof);
+  }
+
+  // Floor
+  const floorGeo=new THREE.PlaneGeometry(r.w*SCALE,r.h*SCALE);
+  const floorMat=new THREE.MeshStandardMaterial({color,transparent:true,opacity:isDem?0.1:0.25});
+  const floor=new THREE.Mesh(floorGeo,floorMat);
+  floor.rotation.x=-Math.PI/2;
+  floor.position.set((r.x+r.w/2)*SCALE,0.02,(r.y+r.h/2)*SCALE);
+  scene.add(floor);
+
+  // Label
+  const div=document.createElement('div');
+  div.style.cssText=`color:#fff;font-size:9px;text-shadow:0 0 4px rgba(0,0,0,.9);white-space:nowrap;text-align:center;pointer-events:none`;
+  div.innerHTML=`${r.name}<br><span style="font-size:7px;opacity:.6">${r.w}×${r.h}</span>`;
+  if(isDem)div.innerHTML=`<span style="color:#fa0">✕</span> ${r.name}`;
+  const lbl=new CSS2DObject(div);
+  lbl.position.set((r.x+r.w/2)*SCALE,h+0.8,(r.y+r.h/2)*SCALE);
+  scene.add(lbl);
+  labelObjects.push(lbl);
+});
+
+// ====== CAMERA PRESETS ======
+window.setCamPreset=function(preset){
+  const cx=PW*SCALE/2,cz=PH*SCALE/2;
+  controls.target.set(cx,2,cz);
+  switch(preset){
+    case'front':camera.position.set(cx,8,cz+35);break;
+    case'back':camera.position.set(cx,8,cz-35);break;
+    case'left':camera.position.set(cx-35,8,cz);break;
+    case'right':camera.position.set(cx+35,8,cz);break;
+    case'top':camera.position.set(cx,50,cz+0.1);break;
+    case'bird':camera.position.set(cx-20,25,cz+25);break;
+  }
+};
+
+window.toggleRoof=function(){showRoof=!showRoof;roofMeshes.forEach(m=>m.visible=showRoof)};
+window.toggleLabels=function(){showLabels=!showLabels;labelObjects.forEach(l=>l.visible=showLabels);frontLabel.visible=showLabels};
+window.toggleDemolish=function(){showDem=!showDem;roomMeshes.forEach(m=>{if(m.userData.isDem)m.visible=showDem})};
+
+// ====== ANIMATE ======
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene,camera);
+  labelRenderer.render(scene,camera);
+}
+animate();
+setCamPreset('bird');
+
+window.addEventListener('resize',()=>{
+  const w=container.clientWidth,h=container.clientHeight;
+  camera.aspect=w/h;camera.updateProjectionMatrix();
+  renderer.setSize(w,h);labelRenderer.setSize(w,h);
+});
+
+// ====== TABS ======
+window.showTab=function(tab){
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',
+    (tab==='3d'&&i===0)||(tab==='elev'&&i===1)||(tab==='side'&&i===2)));
+  document.getElementById('view3d').style.display=tab==='3d'?'':'none';
+  document.getElementById('viewElev').style.display=tab!=='3d'?'':'none';
+  if(tab==='elev'){currentElev='front';drawElevation()}
+  if(tab==='side'){currentElev='side';drawElevation()}
+};
+
+// ====== ELEVATION DRAWING ======
+window.drawElevation=function(){
+  const canvas=document.getElementById('elevCanvas');
+  const ctx=canvas.getContext('2d');
+  const wallH=parseInt(document.getElementById('wallH').value)||10;
+  const parapetH=parseInt(document.getElementById('parapetH').value)||3;
+  const slabInch=parseInt(document.getElementById('slabH').value)||4;
+  const slabFt=slabInch/12;
+  const totalH=wallH+slabFt+parapetH;
+
+  const isFront=currentElev==='front';
+  const title=document.getElementById('elevTitle');
+  title.textContent=isFront?'Front Elevation (Street Side)':'Side Elevation (Left)';
+
+  // For front elevation: look from y=PH toward y=0, x-axis is horizontal
+  // For side elevation: look from x=0 toward x=PW, y-axis is horizontal
+  const plotWidth=isFront?PW:PH;
+
+  const S=8; // px per ft
+  const pad=40;
+  const cw=plotWidth*S+pad*2;
+  const ch=totalH*S+pad*2+30;
+  canvas.width=cw;canvas.height=ch;
+
+  // Background
+  ctx.fillStyle='#0f1117';
+  ctx.fillRect(0,0,cw,ch);
+
+  // Ground line
+  const groundY=ch-pad;
+  const roofY=groundY-wallH*S;
+  const slabTopY=roofY-slabFt*S;
+  const parapetTopY=slabTopY-parapetH*S;
+
+  // Collect rooms visible from this side
+  // Front: rooms touching y=PH (or close to it), sorted by x
+  // Side: rooms touching x=0 (or closest), sorted by y
+  let visibleRooms;
+  if(isFront){
+    // Get all rooms, find the ones at the highest y values (near front)
+    // Show all rooms that would be visible looking from front
+    // Simple approach: project all rooms onto the x-z plane as seen from front
+    visibleRooms=planData.rooms
+      .filter(r=>r.cat!=='demolish')
+      .sort((a,b)=>b.y-a.y); // furthest front first
+  }else{
+    visibleRooms=planData.rooms
+      .filter(r=>r.cat!=='demolish')
+      .sort((a,b)=>a.x-b.x);
+  }
+
+  // Draw sky gradient
+  const skyGrad=ctx.createLinearGradient(0,0,0,groundY);
+  skyGrad.addColorStop(0,'#0a0e1a');skyGrad.addColorStop(1,'#141828');
+  ctx.fillStyle=skyGrad;ctx.fillRect(0,0,cw,groundY);
+
+  // Draw ground
+  ctx.fillStyle='#1a1b25';ctx.fillRect(0,groundY,cw,ch-groundY);
+  ctx.strokeStyle='#3a7adf';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(pad-10,groundY);ctx.lineTo(cw-pad+10,groundY);ctx.stroke();
+
+  // Grid lines (height markers)
+  ctx.strokeStyle='rgba(255,255,255,0.04)';ctx.lineWidth=1;
+  for(let ft=0;ft<=totalH;ft+=5){
+    const gy=groundY-ft*S;
+    ctx.beginPath();ctx.moveTo(pad,gy);ctx.lineTo(cw-pad,gy);ctx.stroke();
+    ctx.fillStyle='#333';ctx.font='8px monospace';
+    ctx.fillText(ft+"'",pad-22,gy+3);
+  }
+
+  // Draw rooms as elevation blocks
+  // Track which x-ranges are already drawn (front-most takes priority)
+  const drawn=[];
+
+  visibleRooms.forEach(r=>{
+    const rH=roomHeight(r);
+    const isNew=r.cat==='new';
+    const isVeranda=r.type==='veranda'||r.type==='courtyard';
+    const h=isVeranda?Math.min(rH,3):wallH;
+
+    let rx,rw;
+    if(isFront){
+      rx=r.x;rw=r.w;
+    }else{
+      rx=r.y;rw=r.h;
+    }
+
+    // Check depth visibility (simplified — draw all, back ones will be behind)
+    const x1=pad+rx*S;
+    const x2=pad+(rx+rw)*S;
+    const wallTop=groundY-h*S;
+
+    // Wall fill
+    const [cr,cg,cb]=hexRgb(r.color);
+    ctx.fillStyle=`rgba(${cr},${cg},${cb},${isNew?0.35:0.25})`;
+    ctx.fillRect(x1,wallTop,x2-x1,h*S);
+
+    // Wall border
+    ctx.strokeStyle=isNew?r.color+'aa':r.color+'77';
+    ctx.lineWidth=isNew?2:1.5;
+    ctx.setLineDash(isNew?[4,3]:[]);
+    ctx.strokeRect(x1,wallTop,x2-x1,h*S);
+    ctx.setLineDash([]);
+
+    // Slab on top (for non-veranda)
+    if(!isVeranda){
+      ctx.fillStyle='rgba(80,80,80,0.5)';
+      ctx.fillRect(x1-1,wallTop-slabFt*S,x2-x1+2,slabFt*S);
+      ctx.strokeStyle='#666';ctx.lineWidth=1;
+      ctx.strokeRect(x1-1,wallTop-slabFt*S,x2-x1+2,slabFt*S);
+
+      // Parapet
+      if(parapetH>0){
+        ctx.fillStyle='rgba(60,60,70,0.4)';
+        ctx.fillRect(x1,wallTop-slabFt*S-parapetH*S,x2-x1,parapetH*S);
+        ctx.strokeStyle='#555';ctx.lineWidth=1;
+        ctx.strokeRect(x1,wallTop-slabFt*S-parapetH*S,x2-x1,parapetH*S);
+      }
+    }
+
+    // Room label
+    ctx.fillStyle='#fff';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';
+    ctx.fillText(r.name,(x1+x2)/2,wallTop+h*S/2+3);
+    ctx.fillStyle='#aaa';ctx.font='7px Segoe UI';
+    ctx.fillText(rw+"ft wide",(x1+x2)/2,wallTop+h*S/2+13);
+
+    // Windows (decorative)
+    if(!isVeranda&&rw>=6&&h>=8){
+      const winW=Math.min(3,rw/3)*S;
+      const winH=4*S;
+      const winY=wallTop+2*S;
+      const numWins=Math.min(3,Math.floor(rw/6));
+      const spacing=(x2-x1)/(numWins+1);
+      ctx.fillStyle='rgba(100,150,255,0.15)';
+      ctx.strokeStyle='rgba(100,150,255,0.3)';ctx.lineWidth=1;
+      for(let i=1;i<=numWins;i++){
+        const wx=x1+spacing*i-winW/2;
+        ctx.fillRect(wx,winY,winW,winH);
+        ctx.strokeRect(wx,winY,winW,winH);
+        // Cross
+        ctx.beginPath();ctx.moveTo(wx+winW/2,winY);ctx.lineTo(wx+winW/2,winY+winH);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(wx,winY+winH/2);ctx.lineTo(wx+winW,winY+winH/2);ctx.stroke();
+      }
+    }
+
+    // Door (on front-most rooms)
+    if(!isVeranda&&rw>=4){
+      const doorW=Math.min(3,rw/4)*S;
+      const doorH=7*S;
+      const doorX=(x1+x2)/2-doorW/2;
+      const doorY=groundY-doorH;
+      ctx.fillStyle='rgba(139,90,43,0.3)';
+      ctx.strokeStyle='rgba(139,90,43,0.5)';ctx.lineWidth=1;
+      ctx.fillRect(doorX,doorY,doorW,doorH);
+      ctx.strokeRect(doorX,doorY,doorW,doorH);
+    }
+  });
+
+  // Width dimension line at bottom
+  ctx.strokeStyle='#4a9eff';ctx.lineWidth=1;
+  const dimY=groundY+18;
+  ctx.beginPath();ctx.moveTo(pad,dimY);ctx.lineTo(pad+plotWidth*S,dimY);ctx.stroke();
+  // End ticks
+  ctx.beginPath();ctx.moveTo(pad,dimY-4);ctx.lineTo(pad,dimY+4);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pad+plotWidth*S,dimY-4);ctx.lineTo(pad+plotWidth*S,dimY+4);ctx.stroke();
+  ctx.fillStyle='#4a9eff';ctx.font='10px Segoe UI';ctx.textAlign='center';
+  ctx.fillText(plotWidth+" ft",pad+plotWidth*S/2,dimY+14);
+
+  // Height dimension
+  ctx.beginPath();ctx.moveTo(pad-8,groundY);ctx.lineTo(pad-8,parapetTopY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pad-12,groundY);ctx.lineTo(pad-4,groundY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pad-12,parapetTopY);ctx.lineTo(pad-4,parapetTopY);ctx.stroke();
+  ctx.save();ctx.translate(pad-18,(groundY+parapetTopY)/2);ctx.rotate(-Math.PI/2);
+  ctx.fillStyle='#4a9eff';ctx.font='9px Segoe UI';ctx.textAlign='center';
+  ctx.fillText(totalH.toFixed(1)+" ft",0,0);
+  ctx.restore();
+};
+
+window.saveElevation=function(){
+  const canvas=document.getElementById('elevCanvas');
+  const a=document.createElement('a');
+  a.href=canvas.toDataURL('image/png');
+  a.download=currentElev+'-elevation.png';
+  a.click();
+};
+
+function hexRgb(hex){const m=hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);return m?[parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)]:[100,100,100]}
+
+})(); // end async IIFE
+</script>
+</body>
+</html>

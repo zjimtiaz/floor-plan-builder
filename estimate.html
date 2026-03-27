@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Construction Estimates</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e0e0e0;min-height:100vh;padding:20px}
+
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.topbar h1{font-size:18px;color:#fff}
+.topbar a{font-size:11px;color:#4a9eff;text-decoration:none;padding:5px 12px;border:1px solid #2a3a5a;border-radius:4px}
+.topbar a:hover{background:#1a2a3a}
+.topbar .src{font-size:10px;color:#555;margin-left:auto}
+
+/* Cards layout */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-bottom:20px}
+.card{background:#1a1b23;border:1px solid #2a2b35;border-radius:8px;padding:16px;overflow:hidden}
+.card h2{font-size:13px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #2a2b35}
+.card h2 .accent{color:#4a9eff}
+
+/* Stats row */
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.stat{flex:1;min-width:80px;background:#14151d;border-radius:6px;padding:10px;text-align:center}
+.stat .val{font-size:22px;font-weight:700;color:#fff}
+.stat .lbl{font-size:9px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.stat.gold .val{color:#ffd700}
+.stat.green .val{color:#2ecc71}
+.stat.blue .val{color:#4a9eff}
+.stat.red .val{color:#e74c3c}
+.stat.purple .val{color:#a29bfe}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+th{text-align:left;padding:6px 8px;color:#666;font-weight:500;font-size:10px;text-transform:uppercase;border-bottom:1px solid #2a2b35}
+td{padding:6px 8px;border-bottom:1px solid #1a1b23}
+tr:hover td{background:#14151d}
+.cdot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.tag{font-size:9px;padding:1px 6px;border-radius:8px;font-weight:500}
+.tag.existing{background:#1a2a3a;color:#4a9eff}
+.tag.new{background:#1a2a1a;color:#6d6}
+.tag.demolish{background:#2a1a00;color:#fa0}
+td.num{text-align:right;font-family:monospace;font-size:12px}
+
+/* Material table */
+.mat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1a1b23;font-size:12px}
+.mat-row:last-child{border:none}
+.mat-row .ml{color:#aaa}
+.mat-row .mv{color:#fff;font-weight:600;font-family:monospace}
+.mat-row .mu{color:#555;font-size:10px;margin-left:4px}
+
+/* Section */
+.section{margin-bottom:16px}
+.section h3{font-size:12px;color:#aaa;margin-bottom:8px}
+
+/* Editable rates */
+.rate-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px}
+.rate-row label{color:#888;min-width:140px}
+.rate-row input{width:90px;padding:3px 6px;background:#14151d;border:1px solid #2a2b35;border-radius:3px;color:#ffd700;font-size:11px;text-align:right;font-family:monospace}
+.rate-row input:focus{border-color:#ffd700;outline:none}
+.rate-row .unit{color:#555;font-size:10px;min-width:60px}
+
+/* Import area */
+.import-area{margin-bottom:20px;padding:14px;background:#1a1b23;border:1px dashed #2a2b35;border-radius:8px;text-align:center}
+.import-area p{font-size:11px;color:#555;margin-bottom:8px}
+.import-area button{padding:6px 16px;background:#14151d;border:1px solid #2a2b35;border-radius:4px;color:#ccc;cursor:pointer;font-size:11px}
+.import-area button:hover{background:#222}
+
+/* Print */
+.print-btn{padding:6px 16px;background:#14151d;border:1px solid #2a2b35;border-radius:4px;color:#ccc;cursor:pointer;font-size:11px}
+.print-btn:hover{background:#222}
+
+/* Totals highlight */
+.total-row td{font-weight:700;color:#fff;border-top:2px solid #2a2b35}
+.total-row td.num{color:#ffd700}
+
+/* Lanter visual */
+.lanter-info{background:#14151d;border-radius:6px;padding:12px;margin-top:8px;font-size:11px;line-height:1.7;color:#aaa}
+.lanter-info strong{color:#fff}
+.lanter-info .formula{color:#4a9eff;font-family:monospace;font-size:10px}
+
+/* Plot mini view */
+.mini-plot{position:relative;border:1px solid #3a7adf;background:#151620;margin:8px auto;border-radius:3px}
+.mini-room{position:absolute;border:1.5px solid;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:6px;color:#fff;text-shadow:0 0 3px rgba(0,0,0,.9);overflow:hidden}
+
+@media print{
+  body{background:#fff;color:#000;padding:10px}
+  .card{border-color:#ddd;break-inside:avoid}
+  .stat{background:#f5f5f5}
+  .stat .val{color:#000}
+  .topbar a,.import-area,.print-btn,.rate-row input{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Construction Estimates</h1>
+  <a href="dashboard.html">Dashboard</a>
+  <a href="index.html" id="backLink">Back to Floor Plan</a>
+  <button class="print-btn" onclick="window.print()">Print</button>
+  <span class="src" id="srcLabel">Source: localStorage</span>
+</div>
+
+<div class="import-area" id="importArea">
+  <p>Auto-loads from saved floor plan. Or import a JSON file:</p>
+  <button onclick="document.getElementById('fi').click()">Import JSON File</button>
+  <input type="file" id="fi" accept=".json" style="display:none"/>
+</div>
+
+<div id="content"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/db.js"></script>
+<script>
+const SAVE_KEY='floorplan_v2';
+let PW=50,PH=77;
+
+// Default rates (PKR) — user can edit these
+let rates={
+  cement:1350,      // per bag (50kg)
+  sand:80,          // per cuft
+  crush:110,        // per cuft
+  steel:280,        // per kg
+  brick:18,         // per brick
+  labor_roof:120,   // per sqft
+  labor_wall:90,    // per sqft
+  labor_floor:70,   // per sqft
+  slab_thickness:4, // inches
+};
+
+let planData=null;
+
+// ====== LOAD ======
+function loadFromStorage(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);
+    if(!raw)return null;
+    const data=JSON.parse(raw);
+    // Convert storage format to standard format
+    return{
+      plot:{w:data.plot?.w||PW,h:data.plot?.h||PH},
+      rooms:(data.rooms||[]).map(r=>({
+        type:r.type||r.t,name:r.name||r.n,color:r.color||r.c,
+        w:r.w,h:r.h,x:r.x,y:r.y,category:r.category||r.cat||'existing'
+      }))
+    };
+  }catch(e){return null}
+}
+
+function loadFromJSON(json){
+  const data=JSON.parse(json);
+  return{
+    plot:{w:data.plot?.w||PW,h:data.plot?.h||PH},
+    rooms:(data.rooms||[]).map(r=>({
+      type:r.type||r.t,name:r.name||r.n,color:r.color||r.c,
+      w:r.w,h:r.h,x:r.x,y:r.y,category:r.category||r.cat||'existing'
+    }))
+  };
+}
+
+document.getElementById('fi').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      planData=loadFromJSON(ev.target.result);
+      document.getElementById('srcLabel').textContent='Source: '+f.name;
+      render();
+    }catch(err){alert('Invalid JSON: '+err.message)}
+  };
+  reader.readAsText(f);e.target.value='';
+});
+
+// ====== CALCULATIONS ======
+function calcEstimate(rooms,plotW,plotH){
+  const existing=rooms.filter(r=>r.category==='existing');
+  const newRooms=rooms.filter(r=>r.category==='new');
+  const demolish=rooms.filter(r=>r.category==='demolish');
+
+  const existingArea=existing.reduce((s,r)=>s+r.w*r.h,0);
+  const newArea=newRooms.reduce((s,r)=>s+r.w*r.h,0);
+  const demolishArea=demolish.reduce((s,r)=>s+r.w*r.h,0);
+  const plotArea=plotW*plotH;
+  const totalBuilt=existingArea+newArea;
+  const openArea=plotArea-totalBuilt;
+
+  // Lanter (roof slab) calculation for NEW rooms only
+  const slabThick=rates.slab_thickness; // inches
+  const slabThickFt=slabThick/12;
+  const concreteVolCuft=newArea*slabThickFt;
+  const concreteVolCum=concreteVolCuft*0.0283168; // cuft to cum
+
+  // 1:2:4 mix — per cum of concrete:
+  // Cement: ~6.3 bags, Sand: 0.44 cum (15.5 cuft), Crush: 0.88 cum (31 cuft)
+  const cementBags=Math.ceil(concreteVolCum*6.3);
+  const sandCuft=Math.ceil(concreteVolCuft*0.44);
+  const crushCuft=Math.ceil(concreteVolCuft*0.88);
+
+  // Steel for 4" slab: ~0.5 kg per sqft (light residential)
+  const steelKg=Math.ceil(newArea*0.5);
+
+  // Wall estimation (new rooms perimeter × assumed 10ft height × 4.5" thick)
+  const wallPerimeter=newRooms.reduce((s,r)=>s+2*(r.w+r.h),0);
+  const wallHeight=10; // ft assumed
+  const wallArea=wallPerimeter*wallHeight; // sqft
+  // Bricks: ~8 per sqft for 4.5" wall
+  const bricks=Math.ceil(wallArea*8);
+
+  // Costs
+  const cementCost=cementBags*rates.cement;
+  const sandCost=sandCuft*rates.sand;
+  const crushCost=crushCuft*rates.crush;
+  const steelCost=steelKg*rates.steel;
+  const brickCost=bricks*rates.brick;
+  const laborRoof=newArea*rates.labor_roof;
+  const laborWall=wallArea*rates.labor_wall;
+  const laborFloor=newArea*rates.labor_floor;
+
+  const materialTotal=cementCost+sandCost+crushCost+steelCost+brickCost;
+  const laborTotal=laborRoof+laborWall+laborFloor;
+  const grandTotal=materialTotal+laborTotal;
+
+  return{
+    existing,newRooms,demolish,
+    existingArea,newArea,demolishArea,plotArea,totalBuilt,openArea,
+    slabThick,concreteVolCuft:Math.ceil(concreteVolCuft),concreteVolCum:concreteVolCum.toFixed(2),
+    cementBags,sandCuft,crushCuft,steelKg,
+    wallPerimeter,wallHeight,wallArea,bricks,
+    cementCost,sandCost,crushCost,steelCost,brickCost,
+    laborRoof,laborWall,laborFloor,
+    materialTotal,laborTotal,grandTotal
+  };
+}
+
+// ====== RENDER ======
+function render(){
+  if(!planData){document.getElementById('content').innerHTML='<p style="color:#555;text-align:center;margin-top:40px">No floor plan loaded. Import a JSON or save from the Floor Plan Builder first.</p>';return}
+
+  const d=planData;
+  const e=calcEstimate(d.rooms,d.plot.w,d.plot.h);
+
+  const fmt=n=>n.toLocaleString('en-PK');
+  const pkr=n=>'Rs '+fmt(n);
+
+  // Mini plot scale
+  const miniScale=3;
+  const miniW=d.plot.w*miniScale;
+  const miniH=d.plot.h*miniScale;
+
+  let miniRooms=d.rooms.map(r=>{
+    const isDem=r.category==='demolish';
+    const isNew=r.category==='new';
+    const bc=isDem?'#fa0':r.color;
+    const bg=isDem?'rgba(255,170,0,.15)':isNew?`${r.color}44`:`${r.color}33`;
+    const bs=isDem||isNew?'dashed':'solid';
+    return`<div class="mini-room" style="left:${r.x*miniScale}px;top:${r.y*miniScale}px;width:${r.w*miniScale}px;height:${r.h*miniScale}px;border-color:${bc};border-style:${bs};background:${bg}">${r.w*miniScale>30?r.name:''}</div>`;
+  }).join('');
+
+  document.getElementById('content').innerHTML=`
+    <div class="grid">
+      <!-- OVERVIEW -->
+      <div class="card">
+        <h2><span class="accent">Overview</span> — Plot ${d.plot.w}×${d.plot.h} ft</h2>
+        <div class="mini-plot" style="width:${miniW}px;height:${miniH}px">${miniRooms}</div>
+        <div class="stats" style="margin-top:12px">
+          <div class="stat blue"><div class="val">${fmt(e.existingArea)}</div><div class="lbl">Existing sqft</div></div>
+          <div class="stat green"><div class="val">${fmt(e.newArea)}</div><div class="lbl">New sqft</div></div>
+          <div class="stat red"><div class="val">${fmt(e.demolishArea)}</div><div class="lbl">Demolish sqft</div></div>
+          <div class="stat gold"><div class="val">${fmt(e.openArea)}</div><div class="lbl">Open sqft</div></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="val">${e.existing.length+e.newRooms.length}</div><div class="lbl">Total Rooms</div></div>
+          <div class="stat purple"><div class="val">${Math.round(e.totalBuilt/e.plotArea*100)}%</div><div class="lbl">Coverage</div></div>
+        </div>
+      </div>
+
+      <!-- ROOM BREAKDOWN -->
+      <div class="card">
+        <h2>Room Breakdown</h2>
+        <table>
+          <tr><th>Room</th><th>Size</th><th style="text-align:right">Area</th><th>Status</th></tr>
+          ${d.rooms.map(r=>`<tr>
+            <td><span class="cdot" style="background:${r.color}"></span>${r.name}</td>
+            <td>${r.w}×${r.h} ft</td>
+            <td class="num">${fmt(r.w*r.h)} sqft</td>
+            <td><span class="tag ${r.category}">${r.category}</span></td>
+          </tr>`).join('')}
+          <tr class="total-row">
+            <td colspan="2">New Construction Total</td>
+            <td class="num">${fmt(e.newArea)} sqft</td>
+            <td></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- ROOF SLAB / LANTER -->
+      <div class="card">
+        <h2><span class="accent">Roof Slab (Lanter)</span> — ${e.slabThick}" Thick</h2>
+        <div class="lanter-info">
+          <strong>New area to cover:</strong> ${fmt(e.newArea)} sqft<br>
+          <span class="formula">Volume = ${fmt(e.newArea)} sqft × ${e.slabThick}/12 ft = ${fmt(e.concreteVolCuft)} cuft (${e.concreteVolCum} m³)</span><br>
+          <strong>Mix ratio:</strong> 1:2:4 (standard residential)
+        </div>
+        <div style="margin-top:10px">
+          <div class="mat-row"><span class="ml">Cement (50kg bags)</span><span><span class="mv">${fmt(e.cementBags)}</span><span class="mu">bags</span></span></div>
+          <div class="mat-row"><span class="ml">Sand (Reth)</span><span><span class="mv">${fmt(e.sandCuft)}</span><span class="mu">cuft</span></span></div>
+          <div class="mat-row"><span class="ml">Crush (Bajri)</span><span><span class="mv">${fmt(e.crushCuft)}</span><span class="mu">cuft</span></span></div>
+          <div class="mat-row"><span class="ml">Steel (Sarya)</span><span><span class="mv">${fmt(e.steelKg)}</span><span class="mu">kg</span></span></div>
+        </div>
+      </div>
+
+      <!-- WALLS -->
+      <div class="card">
+        <h2>Walls (New Rooms)</h2>
+        <div class="lanter-info">
+          <strong>Total wall perimeter:</strong> ${fmt(e.wallPerimeter)} ft<br>
+          <strong>Wall height:</strong> ${e.wallHeight} ft (assumed)<br>
+          <strong>Wall area:</strong> ${fmt(e.wallArea)} sqft<br>
+          <strong>Wall type:</strong> 4.5" brick wall
+        </div>
+        <div style="margin-top:10px">
+          <div class="mat-row"><span class="ml">Bricks (Eentein)</span><span><span class="mv">${fmt(e.bricks)}</span><span class="mu">pieces</span></span></div>
+        </div>
+      </div>
+
+      <!-- COST ESTIMATE -->
+      <div class="card" style="grid-column:1/-1">
+        <h2><span class="accent">Cost Estimate</span> (PKR) — Edit rates below</h2>
+
+        <div style="display:flex;gap:20px;flex-wrap:wrap">
+          <div style="flex:1;min-width:280px">
+            <div class="section">
+              <h3>Rates (click to edit)</h3>
+              <div class="rate-row"><label>Cement per bag</label><input type="number" value="${rates.cement}" onchange="rates.cement=+this.value;render()"><span class="unit">Rs/bag</span></div>
+              <div class="rate-row"><label>Sand per cuft</label><input type="number" value="${rates.sand}" onchange="rates.sand=+this.value;render()"><span class="unit">Rs/cuft</span></div>
+              <div class="rate-row"><label>Crush per cuft</label><input type="number" value="${rates.crush}" onchange="rates.crush=+this.value;render()"><span class="unit">Rs/cuft</span></div>
+              <div class="rate-row"><label>Steel per kg</label><input type="number" value="${rates.steel}" onchange="rates.steel=+this.value;render()"><span class="unit">Rs/kg</span></div>
+              <div class="rate-row"><label>Brick per piece</label><input type="number" value="${rates.brick}" onchange="rates.brick=+this.value;render()"><span class="unit">Rs/pc</span></div>
+              <div class="rate-row"><label>Labor (roof)</label><input type="number" value="${rates.labor_roof}" onchange="rates.labor_roof=+this.value;render()"><span class="unit">Rs/sqft</span></div>
+              <div class="rate-row"><label>Labor (walls)</label><input type="number" value="${rates.labor_wall}" onchange="rates.labor_wall=+this.value;render()"><span class="unit">Rs/sqft</span></div>
+              <div class="rate-row"><label>Labor (floor)</label><input type="number" value="${rates.labor_floor}" onchange="rates.labor_floor=+this.value;render()"><span class="unit">Rs/sqft</span></div>
+              <div class="rate-row"><label>Slab thickness</label><input type="number" value="${rates.slab_thickness}" min="3" max="8" onchange="rates.slab_thickness=+this.value;render()"><span class="unit">inches</span></div>
+            </div>
+          </div>
+
+          <div style="flex:1;min-width:280px">
+            <div class="section">
+              <h3>Materials Cost</h3>
+              <table>
+                <tr><th>Item</th><th>Qty</th><th style="text-align:right">Cost</th></tr>
+                <tr><td>Cement</td><td>${fmt(e.cementBags)} bags</td><td class="num">${pkr(e.cementCost)}</td></tr>
+                <tr><td>Sand</td><td>${fmt(e.sandCuft)} cuft</td><td class="num">${pkr(e.sandCost)}</td></tr>
+                <tr><td>Crush</td><td>${fmt(e.crushCuft)} cuft</td><td class="num">${pkr(e.crushCost)}</td></tr>
+                <tr><td>Steel</td><td>${fmt(e.steelKg)} kg</td><td class="num">${pkr(e.steelCost)}</td></tr>
+                <tr><td>Bricks</td><td>${fmt(e.bricks)} pcs</td><td class="num">${pkr(e.brickCost)}</td></tr>
+                <tr class="total-row"><td colspan="2">Material Total</td><td class="num">${pkr(e.materialTotal)}</td></tr>
+              </table>
+            </div>
+
+            <div class="section">
+              <h3>Labor Cost</h3>
+              <table>
+                <tr><th>Work</th><th>Area</th><th style="text-align:right">Cost</th></tr>
+                <tr><td>Roof/Lanter</td><td>${fmt(e.newArea)} sqft</td><td class="num">${pkr(e.laborRoof)}</td></tr>
+                <tr><td>Walls</td><td>${fmt(e.wallArea)} sqft</td><td class="num">${pkr(e.laborWall)}</td></tr>
+                <tr><td>Floor</td><td>${fmt(e.newArea)} sqft</td><td class="num">${pkr(e.laborFloor)}</td></tr>
+                <tr class="total-row"><td colspan="2">Labor Total</td><td class="num">${pkr(e.laborTotal)}</td></tr>
+              </table>
+            </div>
+
+            <div class="stats" style="margin-top:12px">
+              <div class="stat"><div class="val">${pkr(e.materialTotal)}</div><div class="lbl">Materials</div></div>
+              <div class="stat"><div class="val">${pkr(e.laborTotal)}</div><div class="lbl">Labor</div></div>
+              <div class="stat gold"><div class="val">${pkr(e.grandTotal)}</div><div class="lbl">Grand Total</div></div>
+            </div>
+            <p style="font-size:9px;color:#444;margin-top:8px;text-align:center">* Rough estimate. Actual costs vary by area, market rates, and contractor. Does not include plumbing, electrical, finishing, doors/windows.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ====== INIT (Supabase) ======
+(async()=>{
+  const params=new URLSearchParams(window.location.search);
+  const planId=params.get('plan');
+  const shareToken=params.get('share');
+
+  if(shareToken){
+    const plan=await getPublicPlan(shareToken);
+    if(plan){
+      PW=plan.plot_width;PH=plan.plot_depth;
+      planData={plot:{w:PW,h:PH},rooms:(plan.rooms||[]).map(r=>({type:r.type||r.t,name:r.name||r.n,color:r.color||r.c,w:r.w,h:r.h,x:r.x,y:r.y,category:r.category||r.cat||'existing'}))};
+      document.getElementById('srcLabel').textContent='Source: Shared Plan';
+    }
+  }else if(planId){
+    const user=await requireAuth();
+    if(!user)return;
+    const plan=await getFloorPlan(planId);
+    if(plan){
+      PW=plan.plot_width;PH=plan.plot_depth;
+      planData={plot:{w:PW,h:PH},rooms:(plan.rooms||[]).map(r=>({type:r.type||r.t,name:r.name||r.n,color:r.color||r.c,w:r.w,h:r.h,x:r.x,y:r.y,category:r.category||r.cat||'existing'}))};
+      document.getElementById('srcLabel').textContent='Source: '+plan.name;
+      const bl=document.getElementById('backLink');if(bl)bl.href='index.html?plan='+planId;
+    }
+  }else{
+    planData=loadFromStorage();
+    if(!planData)document.getElementById('srcLabel').textContent='No saved data — import JSON';
+  }
+  render();
+})();
+</script>
+</body>
+</html>

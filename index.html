@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Floor Plan Builder</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e0e0e0;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+
+/* TOP BAR */
+.topbar{display:flex;align-items:center;padding:5px 12px;background:#1a1b23;border-bottom:1px solid #2a2b35;flex-shrink:0;gap:10px}
+.topbar h1{font-size:14px;font-weight:600;color:#fff;white-space:nowrap}
+.topbar .sep{color:#2a2b35;font-size:14px}
+.badge{font-size:9px;padding:2px 7px;border-radius:10px;background:#1a3a1a;color:#5a5;border:1px solid #2a4a2a}
+.badge.unsaved{background:#3a2a1a;color:#da5;border-color:#4a3a1a}
+.topbar .info{font-size:10px;color:#555;margin-left:auto}
+
+/* MAIN */
+.main{display:flex;flex:1;overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{width:210px;background:#14151d;border-right:1px solid #2a2b35;display:flex;flex-direction:column;flex-shrink:0}
+.stitle{padding:9px 12px 3px;font-size:9px;text-transform:uppercase;letter-spacing:1.2px;color:#444;font-weight:600}
+.room-palette{padding:3px 6px;flex:1;overflow-y:auto}
+.room-palette::-webkit-scrollbar{width:4px}
+.room-palette::-webkit-scrollbar-thumb{background:#2a2b35;border-radius:2px}
+.pi{padding:6px 9px;margin:2px 0;background:#1a1b25;border:1px solid #252630;border-radius:4px;cursor:grab;font-size:11px;display:flex;align-items:center;gap:7px;transition:all .12s;user-select:none}
+.pi:hover{background:#222330;border-color:#333445}
+.pi:active{cursor:grabbing;opacity:.7}
+.pi .cd{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.pi .ps{font-size:9px;color:#555;margin-left:auto}
+
+.sbtns{padding:6px;border-top:1px solid #2a2b35}
+.sbtns button{width:100%;padding:6px;margin:2px 0;background:#1a1b25;color:#bbb;border:1px solid #252630;border-radius:4px;cursor:pointer;font-size:10px;text-align:left;padding-left:10px;transition:all .12s}
+.sbtns button:hover{background:#222330}
+.sbtns button.pri{background:#152a18;border-color:#1f3f22;color:#6d6}
+.sbtns button.pri:hover{background:#1a3520}
+.sbtns button.dan{color:#f66}
+.sbtns button.dan:hover{background:#2a1212}
+
+.helpbox{padding:7px 10px;font-size:9px;color:#3a3a3a;line-height:1.6;border-top:1px solid #2a2b35}
+.helpbox kbd{background:#222;padding:1px 4px;border-radius:2px;font-size:8px;color:#888}
+
+/* RIGHT PROPS */
+.rpanel{width:200px;background:#14151d;border-left:1px solid #2a2b35;flex-shrink:0;overflow-y:auto;display:none;flex-direction:column}
+.rpanel.show{display:flex}
+.pr{padding:3px 10px;display:flex;align-items:center;gap:6px}
+.pr label{font-size:10px;color:#666;width:42px;flex-shrink:0}
+.pr input,.pr select{flex:1;padding:3px 6px;background:#1a1b25;border:1px solid #252630;border-radius:3px;color:#ddd;font-size:11px}
+.pr input:focus,.pr select:focus{border-color:#4a9eff;outline:none}
+.pr input[type=color]{padding:0;height:24px;cursor:pointer;border:1px solid #252630}
+.pinfo{padding:4px 10px;font-size:10px;color:#888}
+.pact{padding:6px 10px}
+.pact button{width:100%;padding:5px;margin:2px 0;border-radius:3px;border:1px solid #333;cursor:pointer;font-size:10px}
+.pact .demolish-btn{background:#2a1a00;border-color:#4a3000;color:#fa0}
+.pact .demolish-btn:hover{background:#3a2500}
+.pact .demolish-btn.active{background:#3a2500;color:#fc0;border-color:#fa0}
+.pact .del-btn{background:#1a0a0a;border-color:#3a1515;color:#f66}
+.pact .del-btn:hover{background:#2a1212}
+
+/* CANVAS */
+.canvas-area{flex:1;overflow:hidden;position:relative;background:#0a0b10}
+.cc{position:absolute;transform-origin:0 0}
+
+/* PLOT */
+.plot{position:relative;background:#151620;border:2px solid #3a7adf;box-shadow:0 0 50px rgba(58,122,223,.06)}
+.gl{position:absolute;background:rgba(255,255,255,.025)}
+.gl.maj{background:rgba(255,255,255,.05)}
+.gl.h{height:1px;left:0;right:0}
+.gl.v{width:1px;top:0;bottom:0}
+.fm{position:absolute;font-size:7px;color:#282828;pointer-events:none;font-family:monospace}
+.dl{position:absolute;font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;pointer-events:none;text-align:center}
+.dl.front{bottom:-20px;left:0;right:0;color:#3a7adf}
+.dl.back{top:-20px;left:0;right:0;color:#333}
+
+/* ROOMS */
+.room{position:absolute;border:2px solid;border-radius:3px;cursor:move;display:flex;flex-direction:column;align-items:center;justify-content:center;user-select:none;transition:box-shadow .1s}
+.room:hover{box-shadow:0 0 12px rgba(255,255,255,.06);z-index:90}
+.room.sel{box-shadow:0 0 0 2px #fff,0 0 20px rgba(74,158,255,.2);z-index:100}
+.room.overlap{box-shadow:0 0 0 2px #f44!important}
+.room .rl{font-size:9px;font-weight:500;text-align:center;line-height:1.15;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:92%}
+.room .rs{font-size:7px;opacity:.55;pointer-events:none}
+.room.demolish-marked{opacity:.45;border-style:dashed!important}
+.room.demolish-marked::before{content:'DEMOLISH';position:absolute;font-size:8px;color:#fa0;font-weight:700;letter-spacing:1px;z-index:5;text-shadow:0 0 6px rgba(0,0,0,.9)}
+
+/* RESIZE HANDLES */
+.rh{position:absolute;width:7px;height:7px;background:#fff;border:1px solid #555;border-radius:1px;z-index:101}
+.rh.se{bottom:-3px;right:-3px;cursor:se-resize}
+.rh.sw{bottom:-3px;left:-3px;cursor:sw-resize}
+.rh.ne{top:-3px;right:-3px;cursor:ne-resize}
+.rh.nw{top:-3px;left:-3px;cursor:nw-resize}
+.rh.n{top:-3px;left:calc(50% - 3px);cursor:n-resize}
+.rh.s{bottom:-3px;left:calc(50% - 3px);cursor:s-resize}
+.rh.e{top:calc(50% - 3px);right:-3px;cursor:e-resize}
+.rh.w{top:calc(50% - 3px);left:-3px;cursor:w-resize}
+
+/* ZOOM */
+.zc{position:absolute;bottom:8px;right:8px;display:flex;gap:2px;z-index:200}
+.zc button{width:28px;height:28px;background:#1a1b25;border:1px solid #2a2b35;border-radius:4px;color:#bbb;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.zc button:hover{background:#252630;color:#fff}
+
+/* STATUSBAR */
+.statusbar{padding:3px 14px;background:#1a1b23;border-top:1px solid #2a2b35;font-size:9px;color:#444;display:flex;justify-content:space-between;flex-shrink:0}
+
+/* TOAST */
+.toast{position:fixed;bottom:36px;left:50%;transform:translateX(-50%);background:#1e1f2a;border:1px solid #3a7adf;border-radius:5px;padding:6px 16px;font-size:11px;color:#fff;z-index:600;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+
+/* MODAL */
+.mbg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;display:none;align-items:center;justify-content:center}
+.mbg.show{display:flex}
+.modal{background:#1e1f2a;border:1px solid #3a3b45;border-radius:8px;padding:16px;min-width:300px}
+.modal h3{margin-bottom:10px;font-size:13px;color:#fff}
+.modal label{display:block;margin:5px 0 2px;font-size:10px;color:#777}
+.modal input{width:100%;padding:5px 8px;background:#14151d;border:1px solid #2a2b35;border-radius:3px;color:#ddd;font-size:11px}
+.modal input:focus{border-color:#4a9eff;outline:none}
+.modal .ma{display:flex;gap:6px;margin-top:12px;justify-content:flex-end}
+.modal .ma button{padding:5px 16px;border-radius:4px;border:1px solid #333;background:#222;color:#ddd;cursor:pointer;font-size:11px}
+.modal .ma button.pri{background:#152a18;border-color:#1f3f22;color:#6d6}
+
+.hi{position:absolute;opacity:0;pointer-events:none}
+
+/* OPEN SPACE OVERLAY */
+.open-overlay{position:absolute;border:1.5px dashed #ffd700;background:rgba(255,215,0,.08);border-radius:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;z-index:50}
+.open-overlay .olbl{font-size:9px;color:#ffd700;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,.9);text-align:center;line-height:1.3}
+.open-overlay .oarea{font-size:7px;color:#daa520;opacity:.8}
+.open-overlay.small .olbl{font-size:7px}
+.open-overlay.tiny{border-style:dotted;border-color:rgba(255,215,0,.4);background:rgba(255,215,0,.03)}
+.open-overlay.tiny .olbl{display:none}
+
+/* Hover tooltip on canvas */
+.canvas-tip{position:fixed;background:#1a1b23;border:1px solid #ffd700;border-radius:4px;padding:4px 8px;font-size:10px;color:#ffd700;pointer-events:none;z-index:300;display:none;white-space:nowrap}
+
+/* LEGEND */
+.legend{padding:6px 10px;border-top:1px solid #2a2b35;font-size:9px;color:#444}
+.legend .li{display:flex;align-items:center;gap:5px;margin:2px 0}
+.legend .li .lbox{width:14px;height:10px;border:1.5px solid;border-radius:1px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="dashboard.html" style="color:#4a9eff;text-decoration:none;font-size:11px;padding:3px 8px;border:1px solid #2a3a5a;border-radius:4px">&larr; Dashboard</a>
+  <h1>Floor Plan Builder</h1>
+  <span class="sep">|</span>
+  <span id="planName" style="color:#f0f6fc;font-weight:600;font-size:12px"></span>
+  <span class="badge" id="saveStatus">Auto-saved</span>
+  <span class="info" id="plotInfo">50×77 ft &nbsp;·&nbsp; Grid: 1 ft &nbsp;·&nbsp; Front = Street (Bottom)</span>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="stitle">Drag Rooms to Plot</div>
+    <div class="room-palette" id="palette"></div>
+
+    <div class="legend">
+      <div class="li"><div class="lbox" style="border-color:#4a9eff;border-style:solid;background:rgba(74,158,255,.15)"></div> Existing (solid)</div>
+      <div class="li"><div class="lbox" style="border-color:#a29bfe;border-style:dashed;background:rgba(162,155,254,.15)"></div> New / Planned (dashed)</div>
+      <div class="li"><div class="lbox" style="border-color:#fa0;border-style:dashed;opacity:.5;background:rgba(255,170,0,.08)"></div> Marked for Demolish</div>
+    </div>
+
+    <div class="sbtns">
+      <button id="openSpaceBtn" onclick="toggleOpenSpace()" style="background:#2a2500;border-color:#4a4000;color:#ffd700">Show Open Space</button>
+      <button onclick="openEstimate()" style="background:#1a1a2a;border-color:#3a3a5a;color:#a29bfe">Cost Estimate</button>
+      <button onclick="open3D()" style="background:#1a2a1a;border-color:#2a4a2a;color:#6d6">3D View</button>
+      <button class="pri" onclick="manualSave()">Save Now</button>
+      <button onclick="exportJSON()">Export JSON</button>
+      <button onclick="importJSON()">Import JSON</button>
+      <button onclick="undoAction()">Undo (Ctrl+Z)</button>
+      <button onclick="redoAction()">Redo (Ctrl+Y)</button>
+      <button class="dan" onclick="clearAll()">Clear All</button>
+    </div>
+
+    <div class="helpbox">
+      <kbd>Drag</kbd> room to plot · <kbd>Click</kbd> select · <kbd>Drag</kbd> move<br>
+      <kbd>Corners/Edges</kbd> resize · <kbd>Dbl-click</kbd> edit<br>
+      <kbd>Del</kbd> remove · <kbd>Ctrl+D</kbd> duplicate<br>
+      <kbd>Arrow</kbd> nudge · <kbd>Shift+Arrow</kbd> 5ft<br>
+      <kbd>Scroll</kbd> zoom · <kbd>Drag empty</kbd> pan<br>
+      <kbd>Ctrl+Z</kbd> undo · <kbd>Ctrl+Y</kbd> redo · <kbd>Ctrl+S</kbd> save
+    </div>
+  </div>
+
+  <div class="canvas-area" id="canvasArea">
+    <div class="cc" id="cc">
+      <div class="plot" id="plot"></div>
+    </div>
+    <div class="zc">
+      <button onclick="zoomIn()" title="Zoom In">+</button>
+      <button onclick="zoomOut()" title="Zoom Out">−</button>
+      <button onclick="zoomFit()" title="Fit">⊡</button>
+    </div>
+  </div>
+
+  <div class="rpanel" id="rp">
+    <div class="stitle">Properties</div>
+    <div class="pr"><label>Name</label><input type="text" id="pn" oninput="uProp()"></div>
+    <div class="pr"><label>Width</label><input type="number" id="pw" min="1" max="50" oninput="uProp()"><span style="font-size:9px;color:#444">ft</span></div>
+    <div class="pr"><label>Depth</label><input type="number" id="ph" min="1" max="77" oninput="uProp()"><span style="font-size:9px;color:#444">ft</span></div>
+    <div class="pr"><label>X</label><input type="number" id="px" min="0" oninput="uProp()"></div>
+    <div class="pr"><label>Y</label><input type="number" id="py" min="0" oninput="uProp()"></div>
+    <div class="pr"><label>Color</label><input type="color" id="pc" oninput="uProp()"></div>
+    <div class="pr"><label>Status</label>
+      <select id="pcat" onchange="uProp()">
+        <option value="existing">Existing</option>
+        <option value="new">New / Planned</option>
+        <option value="demolish">Demolish</option>
+      </select>
+    </div>
+    <div class="pinfo"><span id="parea">—</span></div>
+    <div class="pact">
+      <button class="demolish-btn" id="demBtn" onclick="toggleDemolish()">Toggle Demolish</button>
+      <button class="del-btn" onclick="delSel()">Delete Room</button>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span id="sL">Ready</span>
+  <span id="sR">Zoom: 100%</span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="mbg" id="editModal">
+  <div class="modal">
+    <h3 id="mTitle">Edit Room</h3>
+    <label>Name</label><input type="text" id="eName"/>
+    <label>Width (ft)</label><input type="number" id="eW" min="1" max="50"/>
+    <label>Depth (ft)</label><input type="number" id="eH" min="1" max="77"/>
+    <label>Color</label><input type="color" id="eC"/>
+    <div class="ma">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="pri" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fi" accept=".json" class="hi"/>
+<div class="canvas-tip" id="ctip"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/db.js"></script>
+<script>
+// ====== SUPABASE STATE ======
+let currentPlanId=null;
+let supabaseSaveTimer=null;
+
+// ====== CONFIG ======
+const PX=8,SNAP=1,SAVE_KEY='floorplan_v2';
+let PW=50,PH=77;
+const RTYPES=[
+  {t:'bedroom',l:'Bedroom',c:'#4a9eff',w:14,h:12},
+  {t:'guest',l:'Guest Room',c:'#a29bfe',w:12,h:12},
+  {t:'drawing',l:'Drawing Room',c:'#9b59b6',w:16,h:14},
+  {t:'kitchen',l:'Kitchen',c:'#e67e22',w:10,h:10},
+  {t:'bathroom',l:'Bathroom',c:'#1abc9c',w:6,h:5},
+  {t:'veranda',l:'Veranda/Dalaan',c:'#2ecc71',w:20,h:6},
+  {t:'courtyard',l:'Courtyard/Sahn',c:'#f1c40f',w:15,h:15},
+  {t:'garage',l:'Garage',c:'#636e72',w:14,h:20},
+  {t:'store',l:'Store Room',c:'#7f8c8d',w:6,h:6},
+  {t:'lobby',l:'Lobby',c:'#74b9ff',w:10,h:6},
+  {t:'stairs',l:'Stairs',c:'#e74c3c',w:4,h:10},
+  {t:'laundry',l:'Laundry',c:'#00cec9',w:6,h:6},
+  {t:'passage',l:'Passage/Raasta',c:'#b2bec3',w:3,h:15},
+  {t:'wall',l:'Wall/Boundary',c:'#555555',w:20,h:1},
+  {t:'custom',l:'Custom Room',c:'#dfe6e9',w:10,h:10},
+];
+const PRESET=[
+  {t:'bedroom',n:'Bedroom',c:'#4a9eff',w:16,h:12,x:20,y:0,cat:'existing'},
+  {t:'veranda',n:'Veranda',c:'#2ecc71',w:23,h:8,x:13,y:12,cat:'existing'},
+  {t:'kitchen',n:'Kitchen',c:'#e67e22',w:7,h:12,x:13,y:0,cat:'existing'},
+  {t:'bathroom',n:'Bathroom',c:'#1abc9c',w:6,h:5,x:36,y:0,cat:'existing'},
+  {t:'drawing',n:'Drawing 1',c:'#9b59b6',w:18,h:13,x:0,y:64,cat:'existing'},
+  {t:'drawing',n:'Drawing 2',c:'#9b59b6',w:14,h:19,x:18,y:58,cat:'existing'},
+  {t:'bathroom',n:'Bathroom 2',c:'#1abc9c',w:6,h:5,x:32,y:53,cat:'existing'},
+];
+
+// ====== STATE ======
+let rooms=[],nid=1,sel=null;
+let dragging=null,doff={x:0,y:0},resizing=null;
+let scale=1,panX=40,panY=40,panning=false,panS={x:0,y:0};
+let undoStack=[],redoStack=[];
+const MU=80;
+let dirty=false,autoSaveTimer=null;
+
+const plot=document.getElementById('plot'),ca=document.getElementById('canvasArea'),cc=document.getElementById('cc'),rp=document.getElementById('rp');
+
+// ====== INIT ======
+async function init(){
+  // Check auth
+  const user=await requireAuth();
+  if(!user)return;
+
+  // Get plan ID from URL
+  const params=new URLSearchParams(window.location.search);
+  currentPlanId=params.get('plan');
+
+  if(currentPlanId){
+    const plan=await getFloorPlan(currentPlanId);
+    if(plan){
+      PW=plan.plot_width||50;
+      PH=plan.plot_depth||77;
+      document.getElementById('planName').textContent=plan.name;
+      document.getElementById('plotInfo').textContent=PW+'×'+PH+' ft · Grid: 1 ft · Front = Street (Bottom)';
+
+      plot.style.width=PW*PX+'px';
+      plot.style.height=PH*PX+'px';
+      buildGrid();buildPalette();
+
+      const roomsData=denormalizeRooms(plan.rooms||[]);
+      roomsData.forEach(r=>addRoom(r.t,r.n,r.c,r.w,r.h,r.x,r.y,r.cat));
+      pushUndo();
+      zoomFit();
+      return;
+    }else{
+      alert('Floor plan not found');
+      window.location.href='dashboard.html';
+      return;
+    }
+  }else{
+    // No plan ID — redirect to dashboard
+    window.location.href='dashboard.html';
+    return;
+  }
+}
+
+function buildGrid(){
+  for(let i=0;i<=PH;i++){if(i%5!==0)continue;const e=document.createElement('div');e.className='gl h'+(i%10===0?' maj':'');e.style.top=i*PX+'px';plot.appendChild(e)}
+  for(let j=0;j<=PW;j++){if(j%5!==0)continue;const e=document.createElement('div');e.className='gl v'+(j%10===0?' maj':'');e.style.left=j*PX+'px';plot.appendChild(e)}
+  for(let j=0;j<=PW;j+=10){const m=document.createElement('div');m.className='fm';m.style.top='-12px';m.style.left=(j*PX-3)+'px';m.textContent=j+"'";plot.appendChild(m)}
+  for(let i=0;i<=PH;i+=10){const m=document.createElement('div');m.className='fm';m.style.left='-20px';m.style.top=(i*PX-4)+'px';m.textContent=i+"'";plot.appendChild(m)}
+  [{c:'back',t:'BACK'},{c:'front',t:'FRONT — Street Side'}].forEach(d=>{const e=document.createElement('div');e.className='dl '+d.c;e.textContent=d.t;plot.appendChild(e)});
+}
+
+function buildPalette(){
+  const p=document.getElementById('palette');
+  RTYPES.forEach(r=>{
+    const e=document.createElement('div');e.className='pi';e.draggable=true;
+    e.innerHTML=`<span class="cd" style="background:${r.c}"></span>${r.l}<span class="ps">${r.w}×${r.h}</span>`;
+    e.addEventListener('dragstart',ev=>{ev.dataTransfer.effectAllowed='copy';ev.dataTransfer.setData('text/plain',r.t);window._pd=r});
+    p.appendChild(e);
+  });
+}
+
+function loadPreset(){PRESET.forEach(r=>addRoom(r.t,r.n,r.c,r.w,r.h,r.x,r.y,r.cat));pushUndo()}
+
+// ====== ROOM OPS ======
+function addRoom(t,n,c,w,h,x,y,cat){
+  const r={id:nid++,t,n:n||t,c,w,h,x,y,cat:cat||'new'};
+  rooms.push(r);renderRoom(r);updateStatus();return r;
+}
+
+function renderRoom(r){
+  let e=document.getElementById('r'+r.id);
+  if(!e){e=document.createElement('div');e.className='room';e.id='r'+r.id;
+    e.addEventListener('mousedown',ev=>onRoomDown(ev,r));
+    e.addEventListener('dblclick',()=>openModal(r));
+    plot.appendChild(e);
+  }
+  const[rv,gv,bv]=hex2rgb(r.c);
+  const isDem=r.cat==='demolish';
+  const isNew=r.cat==='new';
+  const alpha=isDem?.12:isNew?.3:.2;
+  const bstyle=isDem?'dashed':isNew?'dashed':'solid';
+
+  e.style.left=r.x*PX+'px';e.style.top=r.y*PX+'px';
+  e.style.width=r.w*PX+'px';e.style.height=r.h*PX+'px';
+  e.style.borderColor=isDem?'#fa0':r.c;
+  e.style.borderStyle=bstyle;
+  e.style.background=`rgba(${rv},${gv},${bv},${alpha})`;
+
+  e.classList.toggle('demolish-marked',isDem);
+  e.classList.toggle('sel',sel===r);
+
+  let html=`<span class="rl">${r.n}</span><span class="rs">${r.w}×${r.h} ft</span>`;
+  if(sel===r)html+=`<div class="rh nw" data-h="nw"></div><div class="rh n" data-h="n"></div><div class="rh ne" data-h="ne"></div><div class="rh w" data-h="w"></div><div class="rh e" data-h="e"></div><div class="rh sw" data-h="sw"></div><div class="rh s" data-h="s"></div><div class="rh se" data-h="se"></div>`;
+  e.innerHTML=html;
+
+  e.querySelectorAll('.rh').forEach(h=>{
+    h.addEventListener('mousedown',ev=>{ev.stopPropagation();pushUndo();resizing={r,h:h.dataset.h,sx:ev.clientX,sy:ev.clientY,ow:r.w,oh:r.h,ox:r.x,oy:r.y}});
+  });
+  chkOverlap(r,e);
+}
+
+function rmRoom(r){pushUndo();const e=document.getElementById('r'+r.id);if(e)e.remove();rooms=rooms.filter(x=>x.id!==r.id);if(sel===r){sel=null;rp.classList.remove('show')}updateStatus();markDirty()}
+function selRoom(r){sel=r;rooms.forEach(x=>renderRoom(x));showProps(r)}
+function desel(){sel=null;rooms.forEach(x=>renderRoom(x));rp.classList.remove('show')}
+function chkOverlap(r,e){let o=false;for(const x of rooms){if(x.id===r.id)continue;if(r.x<x.x+x.w&&r.x+r.w>x.x&&r.y<x.y+x.h&&r.y+r.h>x.y){o=true;break}}e.classList.toggle('overlap',o)}
+
+// ====== PROPS PANEL ======
+function showProps(r){
+  rp.classList.add('show');
+  document.getElementById('pn').value=r.n;
+  document.getElementById('pw').value=r.w;
+  document.getElementById('ph').value=r.h;
+  document.getElementById('px').value=r.x;
+  document.getElementById('py').value=r.y;
+  document.getElementById('pc').value=r.c;
+  document.getElementById('pcat').value=r.cat||'new';
+  document.getElementById('parea').textContent=r.w*r.h+' sq ft · '+r.w+'×'+r.h;
+  document.getElementById('demBtn').classList.toggle('active',r.cat==='demolish');
+  document.getElementById('demBtn').textContent=r.cat==='demolish'?'Unmark Demolish':'Mark for Demolish';
+}
+
+function uProp(){
+  if(!sel)return;pushUndo();
+  sel.n=document.getElementById('pn').value||sel.n;
+  sel.w=Math.max(1,parseInt(document.getElementById('pw').value)||sel.w);
+  sel.h=Math.max(1,parseInt(document.getElementById('ph').value)||sel.h);
+  sel.x=Math.max(0,parseInt(document.getElementById('px').value)||0);
+  sel.y=Math.max(0,parseInt(document.getElementById('py').value)||0);
+  sel.c=document.getElementById('pc').value;
+  sel.cat=document.getElementById('pcat').value;
+  sel.x=Math.min(sel.x,PW-sel.w);sel.y=Math.min(sel.y,PH-sel.h);
+  document.getElementById('parea').textContent=sel.w*sel.h+' sq ft · '+sel.w+'×'+sel.h;
+  document.getElementById('demBtn').classList.toggle('active',sel.cat==='demolish');
+  document.getElementById('demBtn').textContent=sel.cat==='demolish'?'Unmark Demolish':'Mark for Demolish';
+  renderRoom(sel);updateStatus();markDirty();
+}
+
+function toggleDemolish(){
+  if(!sel)return;pushUndo();
+  sel.cat=sel.cat==='demolish'?'existing':'demolish';
+  document.getElementById('pcat').value=sel.cat;
+  showProps(sel);renderRoom(sel);updateStatus();markDirty();
+  toast(sel.cat==='demolish'?sel.n+' marked for demolish':sel.n+' unmarked');
+}
+
+function delSel(){if(sel)rmRoom(sel)}
+
+// ====== DRAG FROM PALETTE ======
+ca.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='copy'});
+ca.addEventListener('drop',e=>{
+  e.preventDefault();const rt=window._pd;if(!rt)return;
+  const rect=plot.getBoundingClientRect();
+  let fx=(e.clientX-rect.left)/scale/PX-rt.w/2,fy=(e.clientY-rect.top)/scale/PX-rt.h/2;
+  fx=Math.round(fx/SNAP)*SNAP;fy=Math.round(fy/SNAP)*SNAP;
+  fx=Math.max(0,Math.min(PW-rt.w,fx));fy=Math.max(0,Math.min(PH-rt.h,fy));
+  pushUndo();const r=addRoom(rt.t,rt.l,rt.c,rt.w,rt.h,fx,fy,'new');
+  selRoom(r);toast(rt.l+' added');markDirty();window._pd=null;
+});
+
+// ====== DRAG/RESIZE ROOM ======
+function onRoomDown(e,r){
+  if(e.target.classList.contains('rh'))return;if(e.button!==0)return;e.preventDefault();
+  selRoom(r);pushUndo();
+  const rect=plot.getBoundingClientRect();
+  doff.x=(e.clientX-rect.left)/scale-r.x*PX;
+  doff.y=(e.clientY-rect.top)/scale-r.y*PX;
+  dragging=r;
+}
+
+document.addEventListener('mousemove',e=>{
+  if(dragging){
+    const rect=plot.getBoundingClientRect();
+    let fx=((e.clientX-rect.left)/scale-doff.x)/PX,fy=((e.clientY-rect.top)/scale-doff.y)/PX;
+    fx=Math.round(fx/SNAP)*SNAP;fy=Math.round(fy/SNAP)*SNAP;
+    fx=Math.max(0,Math.min(PW-dragging.w,fx));fy=Math.max(0,Math.min(PH-dragging.h,fy));
+    dragging.x=fx;dragging.y=fy;renderRoom(dragging);showProps(dragging);updateStatus();markDirty();return;
+  }
+  if(resizing){
+    const r=resizing.r,dx=(e.clientX-resizing.sx)/scale/PX,dy=(e.clientY-resizing.sy)/scale/PX,h=resizing.h;
+    let nw=resizing.ow,nh=resizing.oh,nx=resizing.ox,ny=resizing.oy;
+    if(h.includes('e'))nw=Math.max(1,Math.round(resizing.ow+dx));
+    if(h.includes('w')){nw=Math.max(1,Math.round(resizing.ow-dx));nx=resizing.ox+resizing.ow-nw}
+    if(h.includes('s'))nh=Math.max(1,Math.round(resizing.oh+dy));
+    if(h.includes('n')){nh=Math.max(1,Math.round(resizing.oh-dy));ny=resizing.oy+resizing.oh-nh}
+    nx=Math.max(0,nx);ny=Math.max(0,ny);
+    if(nx+nw>PW)nw=PW-nx;if(ny+nh>PH)nh=PH-ny;
+    r.x=nx;r.y=ny;r.w=nw;r.h=nh;
+    renderRoom(r);showProps(r);updateStatus();markDirty();return;
+  }
+  if(panning){panX+=e.clientX-panS.x;panY+=e.clientY-panS.y;panS={x:e.clientX,y:e.clientY};updateTx()}
+});
+
+document.addEventListener('mouseup',()=>{dragging=null;resizing=null;panning=false});
+
+ca.addEventListener('mousedown',e=>{
+  if(e.button===1||e.button===2){e.preventDefault();panning=true;panS={x:e.clientX,y:e.clientY};return}
+  if(e.button===0&&!e.target.closest('.room')&&!e.target.closest('.zc')){desel();panning=true;panS={x:e.clientX,y:e.clientY}}
+});
+ca.addEventListener('contextmenu',e=>e.preventDefault());
+
+// ====== ZOOM ======
+ca.addEventListener('wheel',e=>{
+  e.preventDefault();const f=e.deltaY>0?.9:1.1,ns=Math.max(.15,Math.min(6,scale*f));
+  const rect=ca.getBoundingClientRect(),cx=e.clientX-rect.left,cy=e.clientY-rect.top;
+  panX=cx-(cx-panX)*(ns/scale);panY=cy-(cy-panY)*(ns/scale);
+  scale=ns;updateTx();
+},{passive:false});
+
+function updateTx(){cc.style.transform=`translate(${panX}px,${panY}px) scale(${scale})`;document.getElementById('sR').textContent=`Zoom: ${Math.round(scale*100)}%`}
+function zoomIn(){scale=Math.min(6,scale*1.25);updateTx()}
+function zoomOut(){scale=Math.max(.15,scale/1.25);updateTx()}
+function zoomFit(){const r=ca.getBoundingClientRect();scale=Math.min((r.width-80)/(PW*PX),(r.height-80)/(PH*PX),3);panX=(r.width-PW*PX*scale)/2;panY=(r.height-PH*PX*scale)/2;updateTx()}
+
+// ====== KEYBOARD ======
+document.addEventListener('keydown',e=>{
+  if(document.getElementById('editModal').classList.contains('show')){if(e.key==='Enter')saveEdit();if(e.key==='Escape')closeModal();return}
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if((e.key==='Delete'||e.key==='Backspace')&&sel){rmRoom(sel);return}
+  if(e.ctrlKey&&e.key==='z'){e.preventDefault();undoAction();return}
+  if(e.ctrlKey&&e.key==='y'){e.preventDefault();redoAction();return}
+  if(e.ctrlKey&&e.key==='s'){e.preventDefault();manualSave();return}
+  if(e.ctrlKey&&e.key==='d'&&sel){e.preventDefault();pushUndo();const r=sel;const nr=addRoom(r.t,r.n,r.c,r.w,r.h,Math.min(r.x+2,PW-r.w),Math.min(r.y+2,PH-r.h),r.cat);selRoom(nr);toast('Duplicated');markDirty();return}
+  if(sel&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
+    e.preventDefault();pushUndo();const s=e.shiftKey?5:1;
+    if(e.key==='ArrowLeft')sel.x=Math.max(0,sel.x-s);
+    if(e.key==='ArrowRight')sel.x=Math.min(PW-sel.w,sel.x+s);
+    if(e.key==='ArrowUp')sel.y=Math.max(0,sel.y-s);
+    if(e.key==='ArrowDown')sel.y=Math.min(PH-sel.h,sel.y+s);
+    renderRoom(sel);showProps(sel);updateStatus();markDirty();
+  }
+  if(e.key==='Escape')desel();
+});
+
+// ====== MODAL ======
+let editR=null;
+function openModal(r){editR=r;document.getElementById('mTitle').textContent='Edit: '+r.n;document.getElementById('eName').value=r.n;document.getElementById('eW').value=r.w;document.getElementById('eH').value=r.h;document.getElementById('eC').value=r.c;document.getElementById('editModal').classList.add('show');setTimeout(()=>document.getElementById('eName').focus(),50)}
+function closeModal(){document.getElementById('editModal').classList.remove('show');editR=null}
+function saveEdit(){if(!editR)return;pushUndo();editR.n=document.getElementById('eName').value||editR.n;editR.w=Math.max(1,parseInt(document.getElementById('eW').value)||editR.w);editR.h=Math.max(1,parseInt(document.getElementById('eH').value)||editR.h);editR.c=document.getElementById('eC').value;editR.x=Math.min(editR.x,PW-editR.w);editR.y=Math.min(editR.y,PH-editR.h);renderRoom(editR);if(sel===editR)showProps(editR);closeModal();updateStatus();markDirty()}
+
+// ====== UNDO/REDO ======
+function snap(){return JSON.stringify(rooms.map(r=>({...r})))}
+function pushUndo(){const s=snap();if(undoStack.length>0&&undoStack[undoStack.length-1]===s)return;undoStack.push(s);if(undoStack.length>MU)undoStack.shift();redoStack=[]}
+function restoreSnap(s){const data=JSON.parse(s);rooms.forEach(r=>{const e=document.getElementById('r'+r.id);if(e)e.remove()});rooms=[];sel=null;rp.classList.remove('show');data.forEach(r=>{rooms.push(r);renderRoom(r)});nid=rooms.reduce((m,r)=>Math.max(m,r.id),0)+1;updateStatus();markDirty()}
+function undoAction(){if(!undoStack.length){toast('Nothing to undo');return}redoStack.push(snap());restoreSnap(undoStack.pop());toast('Undo')}
+function redoAction(){if(!redoStack.length){toast('Nothing to redo');return}undoStack.push(snap());restoreSnap(redoStack.pop());toast('Redo')}
+
+// ====== SAVE/LOAD (localStorage) ======
+function saveToLocal(){
+  const data={v:2,plot:{w:PW,h:PH},rooms:rooms.map(r=>({t:r.t,n:r.n,c:r.c,w:r.w,h:r.h,x:r.x,y:r.y,cat:r.cat})),ts:Date.now()};
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify(data))}catch(e){}
+  dirty=false;updateSaveBadge();
+  // Save to Supabase
+  if(currentPlanId){
+    clearTimeout(supabaseSaveTimer);
+    supabaseSaveTimer=setTimeout(async()=>{
+      const ok=await updateFloorPlan(currentPlanId,rooms);
+      if(!ok)updateSaveBadge('Offline');
+    },1000);
+  }
+}
+function loadSaved(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);if(!raw)return false;
+    const data=JSON.parse(raw);if(!data.rooms||!data.rooms.length)return false;
+    data.rooms.forEach(r=>addRoom(r.t,r.n,r.c,r.w,r.h,r.x,r.y,r.cat));
+    pushUndo();return true;
+  }catch(e){return false}
+}
+function markDirty(){dirty=true;updateSaveBadge();scheduleAutoSave()}
+function updateSaveBadge(msg){const b=document.getElementById('saveStatus');b.textContent=msg||(dirty?'Unsaved changes':'Auto-saved');b.classList.toggle('unsaved',dirty||!!msg)}
+function openEstimate(){if(currentPlanId)window.open('estimate.html?plan='+currentPlanId,'_blank');else window.open('estimate.html','_blank')}
+function open3D(){if(currentPlanId)window.open('3d-view.html?plan='+currentPlanId,'_blank');else window.open('3d-view.html','_blank')}
+function scheduleAutoSave(){clearTimeout(autoSaveTimer);autoSaveTimer=setTimeout(()=>{saveToLocal();toast('Auto-saved')},2000)}
+function manualSave(){saveToLocal();toast('Saved!')}
+
+// ====== EXPORT/IMPORT ======
+function exportJSON(){
+  const data={plot:{w:PW,h:PH,note:'y=0 top=BACK, y=77 bottom=FRONT (street)'},rooms:rooms.map(r=>({type:r.t,name:r.n,color:r.c,w:r.w,h:r.h,x:r.x,y:r.y,category:r.cat}))};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='floor-plan.json';a.click();URL.revokeObjectURL(a.href);toast('Exported!')
+}
+function importJSON(){document.getElementById('fi').click()}
+document.getElementById('fi').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const data=JSON.parse(ev.target.result);pushUndo();
+      rooms.forEach(r=>{const el=document.getElementById('r'+r.id);if(el)el.remove()});
+      rooms=[];sel=null;rp.classList.remove('show');
+      (data.rooms||[]).forEach(r=>addRoom(r.type||r.t,r.name||r.n,r.color||r.c,r.w,r.h,r.x,r.y,r.category||r.cat||'existing'));
+      toast(`Imported ${data.rooms.length} rooms`);updateStatus();markDirty();
+    }catch(err){alert('Invalid JSON: '+err.message)}
+  };reader.readAsText(f);e.target.value='';
+});
+function clearAll(){if(!confirm('Sab rooms delete karein?'))return;pushUndo();rooms.forEach(r=>{const e=document.getElementById('r'+r.id);if(e)e.remove()});rooms=[];sel=null;rp.classList.remove('show');updateStatus();markDirty()}
+
+// ====== STATUS ======
+function updateStatus(){
+  const ex=rooms.filter(r=>r.cat==='existing'),nw=rooms.filter(r=>r.cat==='new'),dm=rooms.filter(r=>r.cat==='demolish');
+  const exA=ex.reduce((s,r)=>s+r.w*r.h,0),nwA=nw.reduce((s,r)=>s+r.w*r.h,0),dmA=dm.reduce((s,r)=>s+r.w*r.h,0);
+  const total=exA+nwA;const pct=Math.round(total/(PW*PH)*100);
+  let t=`Rooms: ${rooms.length}`;
+  t+=` · Existing: ${exA} sqft`;
+  if(nwA)t+=` · New: ${nwA} sqft`;
+  if(dmA)t+=` · Demolish: ${dmA} sqft`;
+  t+=` · Total: ${total} sqft (${pct}%)`;
+  t+=` · Open: ${PW*PH-total} sqft`;
+  if(sel)t+=` · [${sel.n} ${sel.w}×${sel.h} @${sel.x},${sel.y}]`;
+  document.getElementById('sL').textContent=t;
+}
+
+// ====== UTIL ======
+function hex2rgb(h){const m=h.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);return m?[parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)]:[100,100,100]}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1800)}
+
+// ====== OPEN SPACE DETECTION ======
+let showingOpen=false;
+const openEls=[];
+
+function toggleOpenSpace(){
+  showingOpen=!showingOpen;
+  document.getElementById('openSpaceBtn').textContent=showingOpen?'Hide Open Space':'Show Open Space';
+  document.getElementById('openSpaceBtn').style.background=showingOpen?'#3a3500':'#2a2500';
+  if(showingOpen) calcOpenSpace(); else clearOpenOverlays();
+}
+
+function clearOpenOverlays(){openEls.forEach(e=>e.remove());openEls.length=0}
+
+function calcOpenSpace(){
+  clearOpenOverlays();
+  // Build occupancy grid (only count existing + new, NOT demolish)
+  const grid=[];
+  for(let y=0;y<PH;y++){grid[y]=[];for(let x=0;x<PW;x++)grid[y][x]=0}
+  rooms.filter(r=>r.cat!=='demolish').forEach(r=>{
+    for(let y=r.y;y<r.y+r.h&&y<PH;y++)
+      for(let x=r.x;x<r.x+r.w&&x<PW;x++)
+        grid[y][x]=1;
+  });
+
+  // Flood fill to find connected open regions
+  const visited=[];
+  for(let y=0;y<PH;y++){visited[y]=[];for(let x=0;x<PW;x++)visited[y][x]=false}
+
+  const regions=[];
+  for(let y=0;y<PH;y++){
+    for(let x=0;x<PW;x++){
+      if(grid[y][x]===0&&!visited[y][x]){
+        // Flood fill
+        const cells=[];
+        const queue=[[x,y]];
+        visited[y][x]=true;
+        while(queue.length){
+          const[cx,cy]=queue.shift();
+          cells.push([cx,cy]);
+          [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dx,dy])=>{
+            const nx=cx+dx,ny=cy+dy;
+            if(nx>=0&&nx<PW&&ny>=0&&ny<PH&&!visited[ny][nx]&&grid[ny][nx]===0){
+              visited[ny][nx]=true;queue.push([nx,ny]);
+            }
+          });
+        }
+        if(cells.length>=4){
+          // Bounding box
+          let minX=PW,minY=PH,maxX=0,maxY=0;
+          cells.forEach(([cx,cy])=>{minX=Math.min(minX,cx);minY=Math.min(minY,cy);maxX=Math.max(maxX,cx);maxY=Math.max(maxY,cy)});
+          regions.push({x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1,area:cells.length});
+        }
+      }
+    }
+  }
+
+  // Sort by area descending
+  regions.sort((a,b)=>b.area-a.area);
+
+  // Draw overlays
+  regions.forEach(r=>{
+    const el=document.createElement('div');
+    const cls=r.area<10?'tiny':r.area<50?'small':'';
+    el.className='open-overlay'+(cls?' '+cls:'');
+    el.style.left=r.x*PX+'px';
+    el.style.top=r.y*PX+'px';
+    el.style.width=r.w*PX+'px';
+    el.style.height=r.h*PX+'px';
+    el.innerHTML=`<span class="olbl">${r.w}×${r.h} ft<br>${r.area} sqft</span>`;
+    plot.appendChild(el);
+    openEls.push(el);
+  });
+
+  toast(regions.length+' open areas found');
+}
+
+// Re-calculate when rooms change (if overlay is visible)
+const origMarkDirty=markDirty;
+markDirty=function(){origMarkDirty();if(showingOpen)calcOpenSpace()};
+
+// ====== HOVER TOOLTIP ON EMPTY SPACE ======
+const ctip=document.getElementById('ctip');
+ca.addEventListener('mousemove',e=>{
+  if(dragging||resizing||panning)return;
+  const rect=plot.getBoundingClientRect();
+  const fx=Math.floor((e.clientX-rect.left)/scale/PX);
+  const fy=Math.floor((e.clientY-rect.top)/scale/PX);
+  if(fx<0||fx>=PW||fy<0||fy>=PH){ctip.style.display='none';return}
+
+  // Check if this spot is occupied
+  const occupied=rooms.some(r=>r.cat!=='demolish'&&fx>=r.x&&fx<r.x+r.w&&fy>=r.y&&fy<r.y+r.h);
+  if(occupied){ctip.style.display='none';return}
+
+  // Quick scan: how much open space from this point (right and down)
+  let maxR=0,maxD=0;
+  for(let x=fx;x<PW;x++){if(rooms.some(r=>r.cat!=='demolish'&&x>=r.x&&x<r.x+r.w&&fy>=r.y&&fy<r.y+r.h))break;maxR++}
+  for(let y=fy;y<PH;y++){if(rooms.some(r=>r.cat!=='demolish'&&fx>=r.x&&fx<r.x+r.w&&y>=r.y&&y<r.y+r.h))break;maxD++}
+
+  ctip.textContent=`Open here: ${maxR}ft wide × ${maxD}ft deep (${maxR*maxD} sqft)`;
+  ctip.style.display='block';
+  ctip.style.left=(e.clientX+12)+'px';
+  ctip.style.top=(e.clientY-8)+'px';
+});
+ca.addEventListener('mouseleave',()=>{ctip.style.display='none'});
+
+// ====== WINDOW ======
+window.addEventListener('beforeunload',()=>saveToLocal());
+window.addEventListener('resize',()=>{});
+
+init();
+</script>
+</body>
+</html>
